@@ -1,0 +1,20 @@
+# GamePartner vision service dependencies
+# Install with: pip install -r src/services/vision/requirements.txt
+#
+# Also required (not pip-installable):
+#   Tesseract OCR binary — https://github.com/UB-Mannheim/tesseract/wiki
+#   Default install path: C:\Program Files\Tesseract-OCR\tesseract.exe
+
+# Screen capture
+mss>=9.0.1
+
+# Computer vision
+opencv-python-headless>=4.9.0   # headless: no GUI deps, smaller install
+numpy>=1.26.0
+
+# OCR
+pytesseract>=0.3.10
+Pillow>=10.2.0                   # required by pytesseract
+
+# HTTP client (posts detections to agent)
+requests>=2.31.0

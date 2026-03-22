@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>GamePartner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: transparent;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      color: #e8e8e8;
+      user-select: none;
+      -webkit-app-region: drag;   /* drag overlay by body */
+    }
+
+    #panel {
+      background: rgba(10, 10, 18, 0.88);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-width: 200px;
+      backdrop-filter: blur(6px);
+    }
+
+    #header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      -webkit-app-region: drag;
+    }
+    #header .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      flex-shrink: 0;
+    }
+    #header .dot.offline { background: #ef4444; }
+    #header span { font-size: 11px; color: #888; letter-spacing: 0.04em; }
+
+    #feed {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 140px;
+      overflow: hidden;
+    }
+
+    .alert {
+      padding: 5px 8px;
+      border-radius: 5px;
+      font-size: 12px;
+      line-height: 1.4;
+      border-left: 3px solid #3b82f6;
+      background: rgba(59,130,246,0.12);
+      animation: fadeIn 0.2s ease;
+    }
+    .alert.critical {
+      border-color: #ff2d55;
+      background: rgba(255,45,85,0.20);
+      font-weight: 600;
+    }
+    .alert.high {
+      border-color: #ef4444;
+      background: rgba(239,68,68,0.15);
+    }
+    .alert.warn {
+      border-color: #f59e0b;
+      background: rgba(245,158,11,0.12);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    #status-bar {
+      margin-top: 8px;
+      display: flex;
+      gap: 10px;
+      font-size: 11px;
+      color: #666;
+    }
+    #status-bar span { display: flex; align-items: center; gap: 3px; }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <div id="header">
+      <div class="dot" id="conn-dot"></div>
+      <span>GamePartner</span>
+    </div>
+    <div id="feed"></div>
+    <div id="status-bar">
+      <span id="hp-display">HP —</span>
+      <span id="credits-display">$ —</span>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

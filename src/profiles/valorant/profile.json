@@ -1,0 +1,232 @@
+{
+  "name": "Valorant",
+  "game": "valorant",
+  "version": "2.0.0",
+  "resolution": [1920, 1080],
+  "maxDecisionsPerFrame": 2,
+
+  "hud": {
+    "health": {
+      "roi": [860, 1020, 120, 30],
+      "method": "ocr_number",
+      "range": [0, 100]
+    },
+    "credits": {
+      "roi": [820, 955, 100, 28],
+      "method": "ocr_number",
+      "range": [0, 9000]
+    },
+    "roundNumber": {
+      "roi": [930, 30, 60, 24],
+      "method": "ocr_number"
+    },
+    "phase": {
+      "roi": [870, 50, 180, 28],
+      "method": "template_match",
+      "templates": {
+        "buy":    "assets/phase_buy.png",
+        "combat": "assets/phase_combat.png"
+      }
+    },
+    "abilities": {
+      "Q": { "roi": [732, 1010, 44, 44], "method": "brightness_threshold", "threshold": 155, "saturation_threshold": 35 },
+      "E": { "roi": [786, 1010, 44, 44], "method": "brightness_threshold", "threshold": 155, "saturation_threshold": 35 },
+      "C": { "roi": [840, 1010, 44, 44], "method": "brightness_threshold", "threshold": 155, "saturation_threshold": 35 },
+      "X": { "roi": [894, 1010, 44, 44], "method": "brightness_threshold", "threshold": 170, "saturation_threshold": 50 }
+    },
+    "killFeed": {
+      "roi": [1400, 60, 500, 300],
+      "method": "ocr_killfeed",
+      "maxEntries": 5
+    },
+    "spikeState": {
+      "method": "multi_template",
+      "states": {
+        "planted":   "assets/spike_planted.png",
+        "defused":   "assets/spike_defused.png",
+        "detonated": "assets/spike_boom.png"
+      }
+    }
+  },
+
+  "rules": [
+
+    {
+      "id": "health_critical",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$lte": 25 } },
+      "priority": "critical",
+      "cooldown": 5000,
+      "confidence": {
+        "minSignals": 2,
+        "window": 2500,
+        "suppressAfter": 8,
+        "suppressWindow": 10000
+      },
+      "context": [
+        { "type": "combat.kill",  "within": 5000, "priorityBoost": 0 },
+        { "type": "combat.death", "within": 3000, "priorityBoost": 0 }
+      ],
+      "supersedes": ["health_low", "health_medium"],
+      "output": {
+        "message": "Critical health — find cover immediately",
+        "ttl": 7000
+      }
+    },
+
+    {
+      "id": "health_critical_under_fire",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$lte": 25 } },
+      "priority": "critical",
+      "cooldown": 6000,
+      "confidence": {
+        "minSignals": 2,
+        "window": 2500
+      },
+      "context": [
+        { "type": "combat.kill",  "within": 4000, "priorityBoost": 1 },
+        { "type": "map.spike_planted", "within": 30000, "priorityBoost": 0 }
+      ],
+      "supersedes": ["health_critical", "health_low", "health_medium"],
+      "output": {
+        "message": "Critical HP + active fight — retreat or ability out",
+        "ttl": 7000
+      }
+    },
+
+    {
+      "id": "health_medium",
+      "trigger": "health.change",
+      "condition": {
+        "payload.current": { "$lte": 50, "$gt": 25 }
+      },
+      "priority": "medium",
+      "cooldown": 8000,
+      "confidence": {
+        "minSignals": 2,
+        "window": 3000,
+        "suppressAfter": 5,
+        "suppressWindow": 15000
+      },
+      "context": [
+        { "type": "map.spike_planted", "within": 30000, "priorityBoost": 1 }
+      ],
+      "supersedes": ["health_low"],
+      "output": {
+        "message": "Low health — play safe",
+        "ttl": 5000
+      }
+    },
+
+    {
+      "id": "health_low",
+      "trigger": "health.change",
+      "condition": {
+        "payload.current": { "$lte": 75, "$gt": 50 }
+      },
+      "priority": "low",
+      "cooldown": 12000,
+      "confidence": {
+        "minSignals": 3,
+        "window": 4000,
+        "suppressAfter": 4,
+        "suppressWindow": 20000
+      },
+      "output": {
+        "message": "Taken damage — consider repositioning",
+        "ttl": 4000
+      }
+    },
+
+    {
+      "id": "ultimate_ready",
+      "trigger": "ability.ult_ready",
+      "priority": "medium",
+      "cooldown": 45000,
+      "confidence": {
+        "minSignals": 2,
+        "window": 3000
+      },
+      "context": [
+        { "type": "round.start",       "within": 10000, "priorityBoost": 1 },
+        { "type": "map.spike_planted", "within": 30000, "priorityBoost": 1 }
+      ],
+      "output": {
+        "message": "Ultimate ready",
+        "ttl": 8000
+      }
+    },
+
+    {
+      "id": "spike_planted",
+      "trigger": "map.spike_planted",
+      "priority": "high",
+      "cooldown": 60000,
+      "confidence": {
+        "minSignals": 1,
+        "window": 2000
+      },
+      "context": [
+        { "type": "health.change", "within": 3000, "priorityBoost": 1 }
+      ],
+      "output": {
+        "message": "Spike planted — rotate or defend",
+        "ttl": 10000
+      }
+    },
+
+    {
+      "id": "spike_defused",
+      "trigger": "map.spike_defused",
+      "priority": "high",
+      "cooldown": 60000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": {
+        "message": "Spike defused",
+        "ttl": 5000
+      }
+    },
+
+    {
+      "id": "buy_phase_economy",
+      "trigger": "round.buy_phase",
+      "priority": "info",
+      "cooldown": 90000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": {
+        "message": "Buy phase — check economy",
+        "ttl": 15000
+      }
+    },
+
+    {
+      "id": "buy_phase_save",
+      "trigger": "round.buy_phase",
+      "condition": { "payload.amount": { "$lte": 2400 } },
+      "priority": "medium",
+      "cooldown": 90000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "supersedes": ["buy_phase_economy"],
+      "output": {
+        "message": "Low credits — consider saving this round",
+        "ttl": 15000
+      }
+    },
+
+    {
+      "id": "on_a_streak",
+      "trigger": "combat.kill",
+      "priority": "low",
+      "cooldown": 20000,
+      "confidence": {
+        "minSignals": 3,
+        "window": 15000
+      },
+      "output": {
+        "message": "On a streak — push your advantage",
+        "ttl": 5000
+      }
+    }
+  ]
+}

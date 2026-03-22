@@ -1,0 +1,50 @@
+{
+  "name": "gamepartner",
+  "version": "0.1.0",
+  "description": "Local-first AI gaming companion",
+  "main": "src/launcher/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --win --x64",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "electron-log": "^5.1.2",
+    "express": "^4.18.3",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "electron": "^29.1.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.gamepartner.app",
+    "productName": "GamePartner",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "src/**/*",
+      "config/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "services/vision",
+        "to": "vision",
+        "filter": ["**/*"]
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  }
+}
