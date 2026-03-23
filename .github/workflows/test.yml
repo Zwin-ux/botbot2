@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python test dependencies
+        # Only numpy needed — synthetic profile requires no cv2 or Tesseract
+        run: pip install numpy
+
+      - name: JS — normalizer unit tests
+        run: node tests/test_normalizer.js
+
+      - name: Python — vision pipeline tests (synthetic profile)
+        run: python tests/test_vision_pipeline.py

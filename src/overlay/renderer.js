@@ -1,64 +1,114 @@
-/**
- * Overlay renderer.
- *
- * Subscribes to the 'decisions' channel (filtered, scored agent outputs) so
- * the overlay only shows things worth acting on — never raw telemetry noise.
- *
- * Raw events (health.change, combat.kill, etc.) are used only to update
- * the status bar values, not to push alerts.
- */
-
 'use strict';
 
-const feed        = document.getElementById('feed');
-const connDot     = document.getElementById('conn-dot');
-const hpDisplay   = document.getElementById('hp-display');
-const credDisplay = document.getElementById('credits-display');
+/**
+ * NES-style overlay renderer.
+ *
+ * HP bar:    10 segmented blocks, coloured green/orange/red by current HP.
+ * Alerts:    step-frame animation, priority sets left-border colour and prefix.
+ * Phase bar: thin strip showing current game phase, auto-hides after 12s.
+ */
 
-const MAX_ALERTS = 5;
+const feed     = document.getElementById('feed');
+const conn     = document.getElementById('conn');
+const hpTrack  = document.getElementById('hp-track');
+const hpNum    = document.getElementById('hp-num');
+const credNum  = document.getElementById('cred-num');
+const phaseBar = document.getElementById('phase-bar');
 
-// ── Agent decisions (from /decisions WS channel) ─────────────────────────────
-// These are pre-filtered by priority, cooldown, and confidence.
-// Each event.payload is a Decision object from decision_engine.js.
+const HP_SEGS    = 10;
+const MAX_ALERTS = 4;
+
+// ── Build HP bar segments ────────────────────────────────────────────────────
+
+for (let i = 0; i < HP_SEGS; i++) {
+  const seg = document.createElement('div');
+  seg.className = 'hp-seg';
+  hpTrack.appendChild(seg);
+}
+
+// ── Game event handler ────────────────────────────────────────────────────────
 
 window.gp.onGameEvent((event) => {
-  connDot.className = 'dot';  // green = live
+  conn.className = 'live';
 
-  if (event.type === 'agent.decision') {
-    const d = event.payload;
-    pushAlert(d.message, d.priority, d.ttl);
-    return;
-  }
-
-  // Status bar updates from raw telemetry events (informational only, no alerts)
   switch (event.type) {
-    case 'health.change':
-      hpDisplay.textContent = `HP ${event.payload.current}/${event.payload.max}`;
-      hpDisplay.style.color = hpColor(event.payload.current);
+
+    case 'agent.decision':
+      pushAlert(event.payload.message, event.payload.priority, event.payload.ttl);
       break;
 
-    case 'economy.credits':
-      credDisplay.textContent = `$ ${event.payload.amount}`;
+    case 'health.change': {
+      const hp  = event.payload.current ?? 0;
+      const max = event.payload.max || 100;
+      setHp(hp, max);
+      break;
+    }
+
+    case 'economy.credits': {
+      const cr = event.payload.amount ?? 0;
+      credNum.textContent = cr >= 1000 ? `${(cr / 1000).toFixed(1)}K` : String(cr);
+      break;
+    }
+
+    case 'round.buy_phase':
+      setPhase('BUY PHASE');
+      break;
+
+    case 'round.start':
+      setPhase('COMBAT');
       break;
   }
 });
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── HP bar (segmented NES-style blocks) ───────────────────────────────────────
+
+function setHp(hp, max) {
+  const pct    = Math.max(0, Math.min(1, hp / max));
+  const filled = Math.round(pct * HP_SEGS);
+
+  const color = hp > 50
+    ? 'var(--green)'
+    : hp > 25
+      ? 'var(--orange)'
+      : 'var(--red)';
+
+  hpTrack.querySelectorAll('.hp-seg').forEach((seg, i) => {
+    seg.style.background = i < filled ? color : 'var(--dim)';
+  });
+
+  hpNum.textContent = hp;
+  hpNum.style.color = hp <= 25
+    ? 'var(--red)'
+    : hp <= 50
+      ? 'var(--orange)'
+      : 'var(--gray)';
+}
+
+// ── Alert feed ────────────────────────────────────────────────────────────────
+
+const PREFIX = {
+  critical: '!!!',
+  high:     '!! ',
+  medium:   '!  ',
+  low:      '\u25B8  ',
+  info:     '   ',
+};
 
 function pushAlert(text, priority = 'info', ttl = 6000) {
-  // Deduplicate: if an identical message is already showing, refresh its timer
-  for (const existing of feed.children) {
-    if (existing.dataset.msg === text) {
-      resetTtl(existing, ttl);
-      return;
-    }
+  // Deduplicate: refresh TTL if same message already visible
+  for (const el of feed.children) {
+    if (el.dataset.msg === text) { resetTtl(el, ttl); return; }
   }
 
-  const el = document.createElement('div');
-  el.className = `alert ${priorityClass(priority)}`;
-  el.textContent = text;
+  const cls = ['critical', 'high', 'medium', 'low'].includes(priority)
+    ? priority : 'info';
+
+  const el       = document.createElement('div');
+  el.className   = `alert ${cls}`;
   el.dataset.msg = text;
-  feed.prepend(el);
+  el.innerHTML   = `<span class="alert-pfx">${PREFIX[cls] || '   '}</span>${esc(text).toUpperCase()}`;
+
+  feed.insertBefore(el, feed.firstChild);
 
   while (feed.children.length > MAX_ALERTS) {
     feed.removeChild(feed.lastChild);
@@ -72,19 +122,21 @@ function resetTtl(el, ttl) {
   el._timer = setTimeout(() => el.remove(), ttl);
 }
 
-function priorityClass(priority) {
-  switch (priority) {
-    case 'critical': return 'critical';
-    case 'high':     return 'high';
-    case 'medium':   return 'warn';
-    default:         return '';
-  }
+// ── Phase bar ────────────────────────────────────────────────────────────────
+
+let phaseTimer = null;
+
+function setPhase(label) {
+  phaseBar.textContent = `\u25BA ${label}`;
+  phaseBar.classList.add('show');
+  clearTimeout(phaseTimer);
+  phaseTimer = setTimeout(() => phaseBar.classList.remove('show'), 12000);
 }
 
-function hpColor(hp) {
-  if (hp <= 25) return '#ef4444';
-  if (hp <= 50) return '#f59e0b';
-  return '#e8e8e8';
-}
+// ── Utils ─────────────────────────────────────────────────────────────────────
 
-connDot.className = 'dot offline';
+function esc(str) {
+  return String(str).replace(/[<>&"]/g, c =>
+    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])
+  );
+}

@@ -1,5 +1,13 @@
 # GamePartner
 
+<p align="center">
+  <img src="assets/sprite.png" width="128" height="128" alt="GamePartner" />
+</p>
+
+<p align="center">
+  <strong>Local-first AI gaming companion — no cloud, no memory reading, no cheating.</strong>
+</p>
+
 A local-first AI gaming companion that runs entirely on your machine.
 It watches your screen, understands game state, and surfaces real-time
 tactical suggestions through a minimal always-on-top overlay — with no

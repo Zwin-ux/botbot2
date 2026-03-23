@@ -4,103 +4,178 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
-  <title>GamePartner</title>
+  <title>GP</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* ═══ NES hardware-accurate palette ═══ */
+    :root {
+      --bg:     #060830;
+      --panel:  #10105C;
+      --panel2: #1A1A80;
+      --border: #F8F8F8;
+      --dim:    #38387C;
+      --text:   #F8F8F8;
+      --gray:   #9898C8;
+      --dark:   #404068;
+      --cursor: #F8C038;
+      --green:  #38C840;
+      --red:    #E83030;
+      --orange: #FC7848;
+      --cyan:   #3CBCFC;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-font-smoothing: none; font-smooth: never;
+    }
 
     body {
       background: transparent;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: 13px;
-      color: #e8e8e8;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px; color: var(--text);
       user-select: none;
-      -webkit-app-region: drag;   /* drag overlay by body */
-    }
-
-    #panel {
-      background: rgba(10, 10, 18, 0.88);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 8px;
-      padding: 10px 12px;
-      min-width: 200px;
-      backdrop-filter: blur(6px);
-    }
-
-    #header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 8px;
       -webkit-app-region: drag;
     }
-    #header .dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: #22c55e;
-      flex-shrink: 0;
-    }
-    #header .dot.offline { background: #ef4444; }
-    #header span { font-size: 11px; color: #888; letter-spacing: 0.04em; }
 
-    #feed {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      max-height: 140px;
-      overflow: hidden;
+    /* CRT scanline texture */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent 0px, transparent 1px,
+        rgba(0,0,0,0.07) 1px, rgba(0,0,0,0.07) 2px
+      );
     }
+
+    /* NES double-border window */
+    #panel {
+      background: var(--panel);
+      border: 3px solid var(--border);
+      box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--border);
+      min-width: 220px; max-width: 264px;
+    }
+
+    /* ── Header ── */
+    #hdr {
+      display: flex; align-items: center;
+      padding: 5px 8px; gap: 0;
+      border-bottom: 2px solid var(--border);
+      background: var(--panel2);
+    }
+
+    #conn {
+      width: 7px; height: 7px;
+      background: var(--red); margin-right: 6px; flex-shrink: 0;
+    }
+    #conn.live { background: var(--green); }
+
+    .brand {
+      font-size: 10px; font-weight: bold; text-transform: uppercase;
+      color: var(--cursor); letter-spacing: 0.1em; flex: 1;
+    }
+
+    .hp-wrap { display: flex; align-items: center; gap: 4px; }
+    .hp-label { font-size: 9px; color: var(--dark); text-transform: uppercase; }
+
+    /* 10 segmented blocks for HP bar */
+    .hp-track { display: flex; gap: 1px; }
+    .hp-seg {
+      width: 5px; height: 8px; background: var(--dim);
+    }
+
+    .hp-num {
+      font-size: 10px; font-weight: bold; color: var(--gray);
+      min-width: 20px; text-align: right;
+    }
+
+    .cred-wrap { margin-left: 6px; display: flex; align-items: center; gap: 2px; }
+    .cred-sym  { font-size: 9px; color: var(--cursor); }
+    .cred-num  { font-size: 10px; font-weight: bold; color: var(--gray); }
+
+    /* ── Alert feed ── */
+    #feed { /* empty until alerts arrive */ }
 
     .alert {
-      padding: 5px 8px;
-      border-radius: 5px;
-      font-size: 12px;
-      line-height: 1.4;
-      border-left: 3px solid #3b82f6;
-      background: rgba(59,130,246,0.12);
-      animation: fadeIn 0.2s ease;
+      display: flex; align-items: flex-start;
+      padding: 6px 8px;
+      border-left: 3px solid var(--dim);
+      font-size: 11px; line-height: 1.4;
+      color: var(--gray); letter-spacing: 0.02em;
+      background: var(--panel);
+      animation: alertIn 0.1s steps(2) forwards;
     }
+
+    @keyframes alertIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    .alert + .alert { border-top: 1px solid var(--dim); }
+
+    .alert-pfx {
+      flex-shrink: 0; margin-right: 6px;
+      font-size: 10px; font-weight: bold;
+    }
+
     .alert.critical {
-      border-color: #ff2d55;
-      background: rgba(255,45,85,0.20);
-      font-weight: 600;
+      border-left-color: var(--red);
+      background: #1C0808; color: #FCA0A0;
     }
+    .alert.critical .alert-pfx { color: var(--red); }
+
     .alert.high {
-      border-color: #ef4444;
-      background: rgba(239,68,68,0.15);
+      border-left-color: var(--orange);
+      background: #1C1008; color: #FDB888;
     }
-    .alert.warn {
-      border-color: #f59e0b;
-      background: rgba(245,158,11,0.12);
-    }
+    .alert.high .alert-pfx { color: var(--orange); }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-4px); }
-      to   { opacity: 1; transform: translateY(0); }
+    .alert.medium {
+      border-left-color: var(--cursor);
     }
+    .alert.medium .alert-pfx { color: var(--cursor); }
 
-    #status-bar {
-      margin-top: 8px;
-      display: flex;
-      gap: 10px;
-      font-size: 11px;
-      color: #666;
+    .alert.low {
+      border-left-color: var(--cyan);
     }
-    #status-bar span { display: flex; align-items: center; gap: 3px; }
+    .alert.low .alert-pfx { color: var(--cyan); }
+
+    /* ── Phase strip ── */
+    #phase-bar {
+      overflow: hidden; height: 0;
+      border-top: 1px solid var(--dim);
+      background: var(--panel2);
+      display: flex; align-items: center;
+      padding: 0 8px;
+      font-size: 9px; color: var(--dark);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      transition: height 0.1s steps(1);
+    }
+    #phase-bar.show { height: 18px; }
   </style>
 </head>
 <body>
   <div id="panel">
-    <div id="header">
-      <div class="dot" id="conn-dot"></div>
-      <span>GamePartner</span>
-    </div>
-    <div id="feed"></div>
-    <div id="status-bar">
-      <span id="hp-display">HP —</span>
-      <span id="credits-display">$ —</span>
-    </div>
-  </div>
 
+    <div id="hdr">
+      <div id="conn"></div>
+      <div class="brand">GP</div>
+
+      <div class="hp-wrap">
+        <span class="hp-label">HP</span>
+        <div class="hp-track" id="hp-track"></div>
+        <span class="hp-num" id="hp-num">&mdash;</span>
+      </div>
+
+      <div class="cred-wrap">
+        <span class="cred-sym">$</span>
+        <span class="cred-num" id="cred-num">&mdash;</span>
+      </div>
+    </div>
+
+    <div id="feed"></div>
+    <div id="phase-bar"></div>
+
+  </div>
   <script src="renderer.js"></script>
 </body>
 </html>

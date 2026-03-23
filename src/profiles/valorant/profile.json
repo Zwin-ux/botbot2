@@ -203,7 +203,7 @@
     {
       "id": "buy_phase_save",
       "trigger": "round.buy_phase",
-      "condition": { "payload.amount": { "$lte": 2400 } },
+      "condition": { "payload.credits": { "$lte": 2400 } },
       "priority": "medium",
       "cooldown": 90000,
       "confidence": { "minSignals": 1, "window": 2000 },

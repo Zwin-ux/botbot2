@@ -1,0 +1,78 @@
+{
+  "name": "Synthetic",
+  "game": "synthetic",
+  "version": "1.0.0",
+  "resolution": [640, 480],
+  "maxDecisionsPerFrame": 2,
+
+  "hud": {
+    "health":      { "roi": [10,  10,  50, 20], "range": [0, 100] },
+    "credits":     { "roi": [10,  40,  50, 20], "range": [0, 9000] },
+    "roundNumber": { "roi": [10,  70,  50, 20] },
+    "phase":       { "roi": [10, 100,  50, 20] },
+    "abilities": {
+      "Q": { "roi": [10,  130, 20, 20] },
+      "E": { "roi": [40,  130, 20, 20] },
+      "C": { "roi": [70,  130, 20, 20] },
+      "X": { "roi": [100, 130, 20, 20] }
+    }
+  },
+
+  "rules": [
+    {
+      "id": "health_critical",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$lte": 25 } },
+      "priority": "critical",
+      "cooldown": 5000,
+      "confidence": { "minSignals": 2, "window": 2500 },
+      "supersedes": ["health_low", "health_medium"],
+      "output": { "message": "Critical health — find cover immediately", "ttl": 7000 }
+    },
+    {
+      "id": "health_medium",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$lte": 50, "$gt": 25 } },
+      "priority": "medium",
+      "cooldown": 8000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "supersedes": ["health_low"],
+      "output": { "message": "Low health — play safe", "ttl": 5000 }
+    },
+    {
+      "id": "health_low",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$lte": 75, "$gt": 50 } },
+      "priority": "low",
+      "cooldown": 12000,
+      "confidence": { "minSignals": 3, "window": 4000 },
+      "output": { "message": "Taken damage — consider repositioning", "ttl": 4000 }
+    },
+    {
+      "id": "buy_phase_economy",
+      "trigger": "round.buy_phase",
+      "priority": "info",
+      "cooldown": 90000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": { "message": "Buy phase — check economy", "ttl": 15000 }
+    },
+    {
+      "id": "buy_phase_save",
+      "trigger": "round.buy_phase",
+      "condition": { "payload.credits": { "$lte": 2400 } },
+      "priority": "medium",
+      "cooldown": 90000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "supersedes": ["buy_phase_economy"],
+      "output": { "message": "Low credits — consider saving this round", "ttl": 15000 }
+    },
+    {
+      "id": "ultimate_ready",
+      "trigger": "ability.ult_ready",
+      "priority": "medium",
+      "cooldown": 45000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": { "message": "Ultimate ready", "ttl": 8000 }
+    }
+  ]
+}

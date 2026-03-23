@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>GamePartner</title>
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       NES HARDWARE-ACCURATE PALETTE
+       Based on NTSC NES PPU output values
+    ════════════════════════════════════════════════════════ */
+    :root {
+      --nes-bg:      #060830;  /* $01 dark — RPG title-screen navy            */
+      --nes-panel:   #10105C;  /* $02 panel — window interior                 */
+      --nes-panel2:  #1A1A80;  /* $11 slightly lighter panel                  */
+      --nes-border:  #F8F8F8;  /* $30 near-white — all borders                */
+      --nes-dim:     #38387C;  /* $02 dim — inactive/unfocused                */
+      --nes-text:    #F8F8F8;  /* $30 white text                              */
+      --nes-gray:    #9898C8;  /* $10 light — secondary text                  */
+      --nes-dark:    #404068;  /* dim inactive text                           */
+      --nes-cursor:  #F8C038;  /* $28 yellow — selection cursor / highlights  */
+      --nes-green:   #38C840;  /* $1A bright green — success / HP full        */
+      --nes-red:     #E83030;  /* $06 red — error / critical                  */
+      --nes-orange:  #FC7848;  /* $17 — warning / med HP                      */
+      --nes-cyan:    #3CBCFC;  /* $21 sky-blue — info                         */
+      --nes-purple:  #9848FC;  /* $24 — accent                                */
+    }
+
+    /* ═══ Reset & base ═══ */
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      /* Disable sub-pixel AA for sharper monospace rendering */
+      -webkit-font-smoothing: none;
+      font-smooth: never;
+    }
+
+    html, body {
+      width: 560px; height: 460px;
+      overflow: hidden;
+      background: var(--nes-bg);
+      color: var(--nes-text);
+      /* Pixel / monospace stack */
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      user-select: none;
+    }
+
+    /* ═══ Scanline CRT overlay ═══ */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent 0px, transparent 1px,
+        rgba(0,0,0,0.06) 1px, rgba(0,0,0,0.06) 2px
+      );
+    }
+
+    /* ═══ NES double-border window ═══
+         Outer border → 4px gap → inner border
+    ═══ */
+    .nes-win {
+      border: 3px solid var(--nes-border);
+      box-shadow: 0 0 0 3px var(--nes-bg), 0 0 0 6px var(--nes-border);
+      background: var(--nes-panel);
+    }
+
+    /* ═══ Title bar ═══ */
+    #titlebar {
+      height: 36px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 12px;
+      background: var(--nes-panel);
+      border-bottom: 3px solid var(--nes-border);
+      -webkit-app-region: drag;
+      letter-spacing: 0.08em;
+    }
+
+    .tb-title {
+      font-size: 11px; font-weight: bold;
+      color: var(--nes-cursor); text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .tb-caret { color: var(--nes-cursor); animation: blink 1s step-end infinite; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    .win-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+    .win-btn {
+      width: 18px; height: 18px;
+      border: 2px solid var(--nes-border);
+      background: var(--nes-panel2); color: var(--nes-border);
+      font-family: 'Courier New', monospace; font-size: 10px; font-weight: bold;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.05s;
+    }
+    .win-btn:hover { background: var(--nes-dim); }
+    .win-btn:active { background: var(--nes-border); color: var(--nes-panel); }
+
+    /* ═══ App layout ═══ */
+    #app { display: flex; flex-direction: column; height: calc(100% - 36px); }
+
+    /* ═══ Viewport: steps ═══ */
+    #viewport { flex: 1; overflow: hidden; position: relative; }
+
+    .step {
+      display: none;
+      position: absolute; inset: 0;
+      padding: 20px 28px 12px;
+      flex-direction: column;
+    }
+    .step.active {
+      display: flex;
+      animation: nesIn 0.15s steps(4) forwards;
+    }
+
+    @keyframes nesIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    /* ════════════════════════════════════
+       STEP 0 — WELCOME
+    ════════════════════════════════════ */
+    .welcome-body {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; gap: 0; text-align: center;
+    }
+
+    /* NES sprite-style logo block */
+    .sprite-box {
+      width: 64px; height: 64px;
+      border: 3px solid var(--nes-border);
+      background: var(--nes-panel2);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+      position: relative;
+      box-shadow: 0 0 0 3px var(--nes-bg), 0 0 0 6px var(--nes-border);
+    }
+    /* pixel art G letter inside */
+    .sprite-box::before {
+      content: 'GP';
+      font-size: 18px; font-weight: bold;
+      color: var(--nes-cursor);
+      letter-spacing: -1px;
+    }
+
+    .welcome-title {
+      font-size: 18px; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--nes-text); margin-bottom: 6px;
+    }
+
+    .welcome-ver {
+      font-size: 10px; color: var(--nes-gray); margin-bottom: 20px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+
+    .feat-grid {
+      display: flex; flex-direction: column; gap: 6px;
+      text-align: left; margin-bottom: 18px;
+    }
+    .feat-row {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 11px; color: var(--nes-gray);
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .feat-row::before {
+      content: '\25A0';  /* ■ */
+      color: var(--nes-cursor); font-size: 8px; flex-shrink: 0;
+    }
+
+    .press-start {
+      font-size: 11px; color: var(--nes-cursor);
+      text-transform: uppercase; letter-spacing: 0.15em;
+      animation: blink 0.9s step-end infinite;
+      margin-top: 4px;
+    }
+
+    /* ════════════════════════════════════
+       STEP 1 — SYSTEM CHECK
+    ════════════════════════════════════ */
+    .step-h {
+      font-size: 13px; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--nes-cursor); margin-bottom: 4px;
+    }
+    .step-sub {
+      font-size: 10px; color: var(--nes-gray); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 14px;
+    }
+
+    .dep-list {
+      display: flex; flex-direction: column; gap: 8px; flex: 1;
+    }
+
+    .dep-row {
+      border: 2px solid var(--nes-dim);
+      background: var(--nes-panel2);
+      padding: 8px 12px;
+      display: flex; align-items: center; gap: 12px;
+      opacity: 0;
+      animation: nesIn 0.1s steps(2) forwards;
+    }
+    .dep-row:nth-child(1) { animation-delay: 0.08s; }
+    .dep-row:nth-child(2) { animation-delay: 0.16s; }
+    .dep-row:nth-child(3) { animation-delay: 0.24s; }
+    .dep-row.ok   { border-color: var(--nes-green); }
+    .dep-row.fail { border-color: var(--nes-red); }
+
+    .dep-label {
+      flex: 1;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--nes-gray);
+    }
+    .dep-row.ok   .dep-label { color: var(--nes-text); }
+    .dep-row.fail .dep-label { color: var(--nes-text); }
+
+    .dep-version {
+      font-size: 10px; color: var(--nes-dark); margin-top: 2px;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .dep-row.ok .dep-version { color: var(--nes-gray); }
+
+    .dep-badge {
+      font-size: 10px; font-weight: bold; text-transform: uppercase;
+      letter-spacing: 0.05em; min-width: 80px; text-align: right;
+    }
+    .dep-badge.checking { color: var(--nes-gray); }
+    .dep-badge.ok       { color: var(--nes-green); }
+    .dep-badge.fail     { color: var(--nes-red); }
+
+    .dep-spin {
+      display: inline-block;
+      animation: spin 0.5s steps(4) infinite;
+    }
+    @keyframes spin {
+      0%   { content: '-'; }
+      25%  { content: '\\'; }
+      50%  { content: '|'; }
+      75%  { content: '/'; }
+    }
+    /* Use ::before trick for ASCII spinner */
+    .spin-char::before {
+      content: '-';
+      animation: spinChar 0.5s steps(4) infinite;
+    }
+    @keyframes spinChar {
+      0%   { content: '-'; }
+      25%  { content: '\\'; }
+      50%  { content: '|'; }
+      75%  { content: '/'; }
+    }
+
+    #btn-install {
+      display: none; margin-top: 10px;
+      border: 2px solid var(--nes-border); background: var(--nes-panel2);
+      color: var(--nes-text); font-family: 'Courier New', monospace;
+      font-size: 11px; font-weight: bold; text-transform: uppercase;
+      letter-spacing: 0.08em; padding: 8px 14px; cursor: pointer;
+      text-align: left; width: 100%;
+      transition: background 0.05s;
+    }
+    #btn-install::before { content: '[ '; color: var(--nes-cursor); }
+    #btn-install::after  { content: ' ]'; color: var(--nes-cursor); }
+    #btn-install:hover:not(:disabled)  { background: var(--nes-dim); }
+    #btn-install:disabled { opacity: 0.35; cursor: default; }
+    #btn-install.working { color: var(--nes-cursor); border-color: var(--nes-cursor); }
+
+    /* ════════════════════════════════════
+       STEP 2 — GAME SELECT
+    ════════════════════════════════════ */
+    .game-list { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+
+    .game-row {
+      border: 2px solid var(--nes-dim);
+      background: var(--nes-panel2);
+      padding: 10px 14px;
+      display: flex; align-items: center; gap: 0;
+      cursor: pointer; position: relative;
+      transition: border-color 0.05s, background 0.05s;
+    }
+    .game-row:hover:not(.off) { border-color: var(--nes-cursor); }
+    .game-row.sel {
+      border-color: var(--nes-cursor);
+      background: var(--nes-panel);
+    }
+    .game-row.off { opacity: 0.30; cursor: default; }
+
+    .g-arrow {
+      width: 16px; font-size: 12px; font-weight: bold;
+      color: var(--nes-cursor); flex-shrink: 0;
+      opacity: 0;
+    }
+    .game-row.sel .g-arrow { opacity: 1; animation: blink 0.7s step-end infinite; }
+
+    .g-name {
+      flex: 1; font-size: 12px; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 0.08em; color: var(--nes-gray);
+    }
+    .game-row.sel .g-name { color: var(--nes-text); }
+
+    .g-tag {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 2px 8px; border: 1px solid;
+    }
+    .g-tag.active { color: var(--nes-green); border-color: var(--nes-green); }
+    .g-tag.soon   { color: var(--nes-dark);  border-color: var(--nes-dark);  }
+
+    .select-hint {
+      margin-top: 12px; font-size: 10px; color: var(--nes-dark);
+      text-transform: uppercase; letter-spacing: 0.06em; text-align: center;
+    }
+
+    /* ════════════════════════════════════
+       STEP 3 — DONE
+    ════════════════════════════════════ */
+    .done-body {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; text-align: center;
+    }
+
+    .done-box {
+      border: 3px solid var(--nes-green);
+      box-shadow: 0 0 0 3px var(--nes-bg), 0 0 0 6px var(--nes-green);
+      background: var(--nes-panel2);
+      padding: 10px 24px; margin-bottom: 18px;
+      animation: nesIn 0.2s steps(4) forwards;
+    }
+    .done-ok {
+      font-size: 16px; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 0.15em;
+      color: var(--nes-green);
+    }
+
+    .done-title {
+      font-size: 14px; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--nes-text); margin-bottom: 14px;
+    }
+
+    .done-hints {
+      display: flex; flex-direction: column; gap: 6px;
+      text-align: left;
+      border: 2px solid var(--nes-dim); background: var(--nes-panel2);
+      padding: 10px 14px; margin-bottom: 14px; width: 100%;
+    }
+    .done-hints li {
+      list-style: none; font-size: 10px; color: var(--nes-gray);
+      text-transform: uppercase; letter-spacing: 0.04em;
+      display: flex; gap: 8px;
+    }
+    .done-hints li::before { content: '\25A0'; color: var(--nes-dim); font-size: 8px; }
+
+    .press-launch {
+      font-size: 11px; color: var(--nes-cursor);
+      text-transform: uppercase; letter-spacing: 0.15em;
+      animation: blink 0.9s step-end infinite;
+    }
+
+    /* ════════════════════════════════════
+       FOOTER — NAVIGATION
+    ════════════════════════════════════ */
+    #footer {
+      height: 46px; display: flex; align-items: center;
+      justify-content: space-between; padding: 0 28px;
+      border-top: 3px solid var(--nes-border);
+      background: var(--nes-panel);
+      flex-shrink: 0;
+    }
+
+    /* Segmented progress bar */
+    .seg-bar { display: flex; align-items: center; gap: 4px; }
+    .seg {
+      width: 14px; height: 10px;
+      background: var(--nes-dark);
+    }
+    .seg.on { background: var(--nes-cursor); }
+
+    .step-label {
+      font-size: 10px; color: var(--nes-dark);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin-left: 10px;
+    }
+
+    .nav-row { display: flex; align-items: center; gap: 0; }
+
+    .nes-btn {
+      border: 2px solid var(--nes-border); background: var(--nes-panel2);
+      color: var(--nes-text); font-family: 'Courier New', monospace;
+      font-size: 11px; font-weight: bold; text-transform: uppercase;
+      letter-spacing: 0.06em; padding: 5px 14px; cursor: pointer;
+      transition: background 0.05s;
+    }
+    .nes-btn:hover:not(:disabled) { background: var(--nes-dim); }
+    .nes-btn:active:not(:disabled) { background: var(--nes-border); color: var(--nes-panel); }
+    .nes-btn:disabled { opacity: 0.32; cursor: default; border-color: var(--nes-dim); }
+
+    .nes-btn-primary {
+      background: var(--nes-cursor); color: var(--nes-bg);
+      border-color: var(--nes-cursor);
+    }
+    .nes-btn-primary:hover:not(:disabled) { background: #FFD860; border-color: #FFD860; }
+    .nes-btn-primary:active:not(:disabled) { background: var(--nes-border); color: var(--nes-panel); }
+
+    .btn-key {
+      font-size: 9px; color: var(--nes-dark);
+      text-transform: uppercase; letter-spacing: 0.04em;
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="titlebar">
+  <div class="tb-title">
+    <span class="tb-caret">&#9658;</span>
+    GAMEPARTNER SETUP
+  </div>
+  <div class="win-btns">
+    <button class="win-btn" id="btn-min" title="Minimize">_</button>
+    <button class="win-btn" id="btn-close" title="Close">X</button>
+  </div>
+</div>
+
+<div id="app">
+  <div id="viewport">
+
+    <!-- ───── STEP 0: WELCOME ───── -->
+    <div class="step active" id="s0">
+      <div class="welcome-body">
+        <div class="sprite-box"></div>
+        <div class="welcome-title">GamePartner</div>
+        <div class="welcome-ver">v0.1.0 &nbsp;&#9632;&nbsp; LOCAL BUILD</div>
+
+        <div class="feat-grid">
+          <div class="feat-row">AI coaching for competitive FPS games</div>
+          <div class="feat-row">Screen OCR at 2 FPS &mdash; no game memory access</div>
+          <div class="feat-row">Minimal always-on-top overlay</div>
+          <div class="feat-row">100% local &mdash; no cloud, no account</div>
+        </div>
+
+        <div class="press-start">&#9658; PRESS [A] TO BEGIN &#9668;</div>
+      </div>
+    </div>
+
+    <!-- ───── STEP 1: SYSTEM CHECK ───── -->
+    <div class="step" id="s1">
+      <div class="step-h">System Requirements</div>
+      <div class="step-sub" id="check-sub">Scanning environment&hellip;</div>
+      <div class="dep-list" id="dep-list"></div>
+      <button id="btn-install" style="display:none">
+        <span id="install-label">Install missing packages via pip</span>
+      </button>
+    </div>
+
+    <!-- ───── STEP 2: GAME SELECT ───── -->
+    <div class="step" id="s2">
+      <div class="step-h">Select Game Profile</div>
+      <div class="step-sub">Load the matching detection rules</div>
+      <div class="game-list">
+        <div class="game-row sel" data-game="valorant">
+          <span class="g-arrow">&#9658;</span>
+          <span class="g-name">Valorant</span>
+          <span class="g-tag active">ACTIVE</span>
+        </div>
+        <div class="game-row off" data-game="cs2">
+          <span class="g-arrow">&#9658;</span>
+          <span class="g-name">CS2</span>
+          <span class="g-tag soon">SOON</span>
+        </div>
+        <div class="game-row off" data-game="apex">
+          <span class="g-arrow">&#9658;</span>
+          <span class="g-name">Apex Legends</span>
+          <span class="g-tag soon">SOON</span>
+        </div>
+        <div class="game-row off" data-game="ow2">
+          <span class="g-arrow">&#9658;</span>
+          <span class="g-name">Overwatch 2</span>
+          <span class="g-tag soon">SOON</span>
+        </div>
+      </div>
+      <div class="select-hint">&#9650;&#9660; use arrow keys or click to select</div>
+    </div>
+
+    <!-- ───── STEP 3: DONE ───── -->
+    <div class="step" id="s3">
+      <div class="done-body">
+        <div class="done-box">
+          <div class="done-ok">&#10003; SETUP COMPLETE</div>
+        </div>
+        <div class="done-title">You're ready to play</div>
+        <ul class="done-hints">
+          <li>Overlay appears top-right &mdash; drag to reposition</li>
+          <li>Right-click tray icon to hide, restart, or quit</li>
+          <li>Tesseract OCR must be installed for full detection</li>
+        </ul>
+        <div class="press-launch">&#9658; PRESS [A] TO LAUNCH &#9668;</div>
+      </div>
+    </div>
+
+  </div><!-- /viewport -->
+
+  <div id="footer">
+    <div style="display:flex;align-items:center;">
+      <div class="seg-bar" id="seg-bar">
+        <div class="seg on"></div>
+        <div class="seg"></div>
+        <div class="seg"></div>
+        <div class="seg"></div>
+      </div>
+      <span class="step-label" id="step-label">STEP 1 OF 4</span>
+    </div>
+    <div class="nav-row" id="nav-row">
+      <span class="btn-key">[B]</span>
+      <button class="nes-btn" id="btn-back" style="display:none">BACK</button>
+      <span class="btn-key" id="a-key" style="margin-left:10px">[A]</span>
+      <button class="nes-btn nes-btn-primary" id="btn-next">START</button>
+    </div>
+  </div>
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>

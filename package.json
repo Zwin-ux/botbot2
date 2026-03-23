@@ -7,7 +7,10 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder --win --x64",
-    "pack": "electron-builder --dir"
+    "pack": "electron-builder --dir",
+    "test": "node tests/test_normalizer.js",
+    "test:python": "python tests/test_vision_pipeline.py",
+    "test:all": "node tests/test_normalizer.js && python tests/test_vision_pipeline.py"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3",
