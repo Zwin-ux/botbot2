@@ -15,14 +15,14 @@ Check items off as completed. Sections are ordered by priority.
 - [x] Vision service test mode works (`python src/services/vision/server.py --test`)
 - [ ] Verify `npm install && npm start` works on a clean clone (no hidden deps)
 - [ ] Verify `pip install -r src/services/vision/requirements.txt` completes cleanly
-- [ ] Add `LICENSE` file (MIT recommended — one already referenced in README)
+- [x] `LICENSE` file present (MIT)
 
 ---
 
 ## 🟡 High priority — Complete before sharing the link
 
 ### Repository hygiene
-- [ ] Add `LICENSE` file at project root
+- [x] `LICENSE` file present at project root (MIT)
 - [ ] Confirm `package.json` `name`, `version`, `description` are accurate
 - [ ] Remove any leftover debug `console.log` / `print` statements
 - [ ] Audit all `TODO` / `FIXME` / `STUB` comments — either resolve or file as issues
@@ -32,9 +32,8 @@ Check items off as completed. Sections are ordered by priority.
       is not yet implemented; returns empty list every frame
 - [ ] **Spike state detection** — `hud.spikeState` uses `multi_template` but
       template images (`assets/spike_*.png`) do not exist; field always returns null
-- [ ] **Round end detection** — no event emitted for `round.end` (winner, reason)
-- [ ] **Phase `template_match`** → currently falls through to the OCR keyword path;
-      either ship the template images or officially change `method` to `ocr_keyword`
+- [x] **Round end detection** — `round.end` event now emitted for `end_win`/`end_loss` phase transitions
+- [x] **Phase `template_match`** → changed `method` to `ocr_keyword`; no longer requires template images
 
 ### Calibration
 - [ ] **Calibrate health ROI** against a real Valorant screenshot
@@ -45,8 +44,8 @@ Check items off as completed. Sections are ordered by priority.
 - [ ] Update `profile.json` `version` to `3.0.0` once ROIs are confirmed
 
 ### Documentation
-- [ ] Add `docs/calibration.md` — step-by-step screenshot + calibration walkthrough
-- [ ] Add `docs/adding-a-game.md` — profile + detector authoring guide
+- [x] Add `src/profiles/README.md` — profile authoring spec (HUD methods, rule schema, canonical phase strings)
+- [x] Add `docs/adding-a-game.md` — step-by-step new game profile guide
 
 ---
 
@@ -64,12 +63,11 @@ Check items off as completed. Sections are ordered by priority.
 - [ ] Add `scripts/setup.bat` for one-click Windows setup
 
 ### CI / Automation
-- [ ] Add `.github/workflows/test.yml` — runs `node tests/test_normalizer.js`
-      on every push (no game or Tesseract needed for this test)
+- [x] `.github/workflows/test.yml` — runs `node tests/test_normalizer.js` and Python vision tests on every push
 - [ ] Add `.github/workflows/lint.yml` — ESLint for JS, flake8 for Python
 
 ### Multi-game
-- [ ] Define `src/profiles/README.md` — spec for what a valid profile must contain
+- [x] Define `src/profiles/README.md` — spec for what a valid profile must contain
 - [ ] Stub out a second game profile (e.g. CS2) to prove the architecture is generic
 
 ### Overlay UX
@@ -81,24 +79,25 @@ Check items off as completed. Sections are ordered by priority.
 
 ## 📋 Known issues to file as GitHub Issues after push
 
-| Issue | Location | Severity |
-|---|---|---|
-| Arrow key nudge in calibrator may not work on some Windows OpenCV builds | `tools/calibrate_rois.py` | Low |
-| `phase` method is `template_match` but templates not shipped | `profile.json` | Medium |
-| Kill feed OCR stub always returns `[]` | `detector.py` | Medium |
-| Spike state detection needs template images | `detector.py`, `assets/` | Medium |
-| `buy_phase_save` rule checks `payload.amount` but `BUY_PHASE` event payload sends `credits` | `profile.json`, `normalizer.js` | High |
-| Electron `nativeImage.createEmpty()` used for tray — replace with real icon | `launcher/main.js` | Low |
+| Issue | Location | Severity | Status |
+|---|---|---|---|
+| Arrow key nudge in calibrator may not work on some Windows OpenCV builds | `tools/calibrate_rois.py` | Low | Open |
+| Kill feed OCR stub always returns `[]` | `detector.py` | Medium | Open |
+| Spike state detection needs template images | `detector.py`, `assets/` | Medium | Open |
+| Electron `nativeImage.createEmpty()` used for tray — replace with real icon | `launcher/main.js` | Low | Open |
+| ~~`phase` method is `template_match` but templates not shipped~~ | `profile.json` | Medium | **Fixed** |
+| ~~`buy_phase_save` rule checks `payload.amount` but `BUY_PHASE` event payload sends `credits`~~ | `profile.json` | High | **Fixed** (field is `payload.credits`) |
+| ~~`round.end` event never emitted~~ | `normalizer.js` | Medium | **Fixed** |
+| ~~`prevState` in spike event captured after state mutation~~ | `normalizer.js` | Low | **Fixed** |
 
 ---
 
 ## 🚀 Suggested first GitHub issues to open
 
 1. **[enhancement] Implement kill feed OCR** — `detector.py::_read_kill_feed()`
-2. **[bug] Fix buy_phase_save rule payload field name** — `payload.credits` not `payload.amount`
-3. **[enhancement] Ship spike state template images or switch to contour detection**
-4. **[enhancement] Calibrate default Valorant ROIs and update profile.json**
-5. **[docs] Add calibration walkthrough with screenshots**
+2. **[enhancement] Ship spike state template images or switch to contour detection**
+3. **[enhancement] Calibrate default Valorant ROIs and update profile.json**
+4. **[docs] Add calibration walkthrough with screenshots**
 
 ---
 

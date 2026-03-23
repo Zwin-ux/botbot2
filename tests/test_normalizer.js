@@ -407,6 +407,49 @@ section('SUITE F — Phase confirmation buffer');
 }
 
 
+// ── SUITE G — round.end event ─────────────────────────────────────────────────
+{
+  console.log(`\n${'─'.repeat(60)}`);
+  console.log('  SUITE G — round.end event emission');
+  console.log(`${'─'.repeat(60)}`);
+
+  const norm7 = new EventNormalizer('valorant', 'sess-g');
+
+  // Establish combat phase first (2-confirm)
+  norm7.normalize({ game: 'valorant', timestamp: 9000, raw: { phase: { value: 'combat', confidence: 0.90 }, round_number: { value: 5, confidence: 0.95 } } });
+  norm7.normalize({ game: 'valorant', timestamp: 9500, raw: { phase: { value: 'combat', confidence: 0.90 }, round_number: { value: 5, confidence: 0.95 } } });
+  assert(norm7._state.phase === 'combat', 'Suite G setup: phase = combat');
+
+  // First end_win read (1 of 2 needed)
+  const evG1 = norm7.normalize({ game: 'valorant', timestamp: 10000, raw: { phase: { value: 'end_win', confidence: 0.85 } } });
+  assertEventTypes(evG1, [], 'Phase G-A: round.end not yet emitted after 1 read');
+
+  // Second end_win read — should confirm and emit round.end
+  const evG2 = norm7.normalize({ game: 'valorant', timestamp: 10500, raw: { phase: { value: 'end_win', confidence: 0.88 } } });
+  console.log('\nRound end (win confirmed):');
+  printEvents(evG2);
+
+  assertEventTypes(evG2, ['round.end'], 'Phase G-B: round.end emitted on confirmation');
+  assert(norm7._state.phase === 'end_win', 'Phase G-B: phase state = "end_win"');
+  assert(evG2[0]?.payload.winner === 'self', 'Phase G-B: winner = self');
+  assert(evG2[0]?.payload.reason === 'end_win', 'Phase G-B: reason = end_win');
+  assert(evG2[0]?.payload.roundNumber === 5, 'Phase G-B: roundNumber = 5');
+
+  // Verify round.end emitted for end_loss too
+  const norm8 = new EventNormalizer('valorant', 'sess-h');
+  norm8.normalize({ game: 'valorant', timestamp: 11000, raw: { phase: { value: 'combat', confidence: 0.90 }, round_number: { value: 7, confidence: 0.95 } } });
+  norm8.normalize({ game: 'valorant', timestamp: 11500, raw: { phase: { value: 'combat', confidence: 0.90 } } });
+  norm8.normalize({ game: 'valorant', timestamp: 12000, raw: { phase: { value: 'end_loss', confidence: 0.82 } } });
+  const evH = norm8.normalize({ game: 'valorant', timestamp: 12500, raw: { phase: { value: 'end_loss', confidence: 0.87 } } });
+  console.log('\nRound end (loss confirmed):');
+  printEvents(evH);
+
+  assertEventTypes(evH, ['round.end'], 'Phase G-C: round.end emitted for end_loss');
+  assert(evH[0]?.payload.winner === 'enemy', 'Phase G-C: winner = enemy');
+  assert(evH[0]?.payload.reason === 'end_loss', 'Phase G-C: reason = end_loss');
+}
+
+
 // ── Results ───────────────────────────────────────────────────────────────────
 console.log(`\n${'═'.repeat(60)}`);
 console.log(`  Results: ${_passed} passed, ${_failed} failed`);

@@ -22,11 +22,7 @@
     },
     "phase": {
       "roi": [870, 50, 180, 28],
-      "method": "template_match",
-      "templates": {
-        "buy":    "assets/phase_buy.png",
-        "combat": "assets/phase_combat.png"
-      }
+      "method": "ocr_keyword"
     },
     "abilities": {
       "Q": { "roi": [732, 1010, 44, 44], "method": "brightness_threshold", "threshold": 155, "saturation_threshold": 35 },
@@ -226,6 +222,32 @@
       "output": {
         "message": "On a streak — push your advantage",
         "ttl": 5000
+      }
+    },
+
+    {
+      "id": "round_end_win",
+      "trigger": "round.end",
+      "condition": { "payload.winner": { "$eq": "self" } },
+      "priority": "medium",
+      "cooldown": 30000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": {
+        "message": "Round won — maintain momentum",
+        "ttl": 8000
+      }
+    },
+
+    {
+      "id": "round_end_loss",
+      "trigger": "round.end",
+      "condition": { "payload.winner": { "$eq": "enemy" } },
+      "priority": "medium",
+      "cooldown": 30000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": {
+        "message": "Round lost — reset and adapt",
+        "ttl": 8000
       }
     }
   ]
