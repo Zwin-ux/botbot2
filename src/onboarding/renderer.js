@@ -2,11 +2,14 @@
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let currentStep  = 0;
-let selectedGame = 'valorant';
-let selectedRes  = '1920x1080';
-let depsChecked  = false;
-let isPackaged   = false;
+const state = {
+  step:        0,
+  game:        'valorant',
+  res:         '1920x1080',
+  depsChecked: false,
+  packaged:    false,
+  busy:        false,
+};
 
 const TOTAL_STEPS = 5;
 const STEP_NAMES  = ['STEP 1 OF 5', 'STEP 2 OF 5', 'STEP 3 OF 5', 'STEP 4 OF 5', 'STEP 5 OF 5'];
@@ -14,61 +17,53 @@ const NEXT_LABELS = ['[A] Start', '[A] Continue', '[A] Continue', '[A] Continue'
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
-const btnNext  = document.getElementById('btn-next');
-const btnBack  = document.getElementById('btn-back');
-const segBar   = document.getElementById('seg-bar');
-const stepLbl  = document.getElementById('step-label');
+const btnNext = document.getElementById('btn-next');
+const btnBack = document.getElementById('btn-back');
+const segBar  = document.getElementById('seg-bar');
+const stepLbl = document.getElementById('step-label');
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
 function goTo(n) {
+  if (state.busy) return;
   const next = Math.max(0, Math.min(TOTAL_STEPS - 1, n));
 
-  document.getElementById(`s${currentStep}`)?.classList.remove('active');
-  currentStep = next;
-  document.getElementById(`s${currentStep}`)?.classList.add('active');
+  document.getElementById(`s${state.step}`)?.classList.remove('active');
+  state.step = next;
+  document.getElementById(`s${state.step}`)?.classList.add('active');
 
-  segBar.querySelectorAll('.seg').forEach((s, i) => s.classList.toggle('on', i <= currentStep));
-  stepLbl.textContent  = STEP_NAMES[currentStep];
-  btnNext.textContent  = NEXT_LABELS[currentStep];
-  btnBack.style.display = currentStep > 0 ? 'inline-block' : 'none';
+  segBar.querySelectorAll('.seg').forEach((s, i) => s.classList.toggle('on', i <= state.step));
+  stepLbl.textContent = STEP_NAMES[state.step];
+  btnNext.textContent = NEXT_LABELS[state.step];
+  btnNext.classList.toggle('primary', state.step === TOTAL_STEPS - 1);
+  btnNext.disabled = false;
+  btnBack.style.display = state.step > 0 ? 'inline-block' : 'none';
 
-  if (currentStep === TOTAL_STEPS - 1) {
-    btnNext.classList.add('primary');
-  } else {
-    btnNext.classList.remove('primary');
-  }
-
-  // Step entry side-effects
-  if (currentStep === 1 && !depsChecked) runSystemCheck();
+  if (state.step === 1 && !state.depsChecked) runSystemCheck();
 }
 
 btnNext.addEventListener('click', () => {
-  if (currentStep === TOTAL_STEPS - 1) { launch(); return; }
-  goTo(currentStep + 1);
+  if (state.step === TOTAL_STEPS - 1) { launch(); return; }
+  goTo(state.step + 1);
 });
-btnBack.addEventListener('click', () => goTo(currentStep - 1));
+btnBack.addEventListener('click', () => goTo(state.step - 1));
 
-// Keyboard navigation
 document.addEventListener('keydown', (e) => {
   const k = e.key;
-
   if (k === 'Enter' || k === 'a' || k === 'A') {
-    if (currentStep === TOTAL_STEPS - 1) { launch(); return; }
-    goTo(currentStep + 1);
+    if (state.step === TOTAL_STEPS - 1) { launch(); return; }
+    goTo(state.step + 1);
   }
-  if ((k === 'b' || k === 'B' || k === 'Escape') && currentStep > 0) {
-    goTo(currentStep - 1);
-  }
+  if ((k === 'b' || k === 'B' || k === 'Escape') && state.step > 0) goTo(state.step - 1);
 
-  if (currentStep === 2) {
+  if (state.step === 2) {
     const rows = [...document.querySelectorAll('.game-row:not(.off)')];
     const cur  = rows.findIndex(r => r.classList.contains('sel'));
     if (k === 'ArrowDown' && cur < rows.length - 1) selectGame(rows[cur + 1]);
     if (k === 'ArrowUp'   && cur > 0)               selectGame(rows[cur - 1]);
   }
 
-  if (currentStep === 3) {
+  if (state.step === 3) {
     const rows = [...document.querySelectorAll('.res-row')];
     const cur  = rows.findIndex(r => r.classList.contains('sel'));
     if (k === 'ArrowDown' && cur < rows.length - 1) selectRes(rows[cur + 1]);
@@ -76,13 +71,30 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Window controls
 document.getElementById('btn-close').addEventListener('click', () => window.gp.close());
 document.getElementById('btn-min').addEventListener('click',   () => window.gp.minimize());
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function withTimeout(promise, ms = 15000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('TIMED OUT')), ms)
+    ),
+  ]);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function esc(str) {
+  return String(str).replace(/[<>&"]/g, c =>
+    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])
+  );
+}
+
 // ── System Check (Step 1) ─────────────────────────────────────────────────────
 
-// Checks shown in packaged mode (everything bundled except Tesseract)
 const PACKAGED_CHECKS = [
   { id: 'vision',    label: 'Vision Engine'    },
   { id: 'engine',    label: 'Decision Engine'  },
@@ -90,7 +102,6 @@ const PACKAGED_CHECKS = [
   { id: 'tesseract', label: 'Tesseract OCR'    },
 ];
 
-// Checks shown in dev mode (raw dep check)
 const DEV_CHECKS = [
   {
     key: 'python', id: 'python', label: 'Python 3.x',
@@ -112,63 +123,77 @@ const DEV_CHECKS = [
 ];
 
 async function runSystemCheck() {
-  depsChecked = true;
+  state.depsChecked = true;
+  state.busy        = true;
+  btnNext.disabled  = true;
+
   const list   = document.getElementById('check-list');
   const sub    = document.getElementById('check-sub');
   const status = document.getElementById('check-status');
   list.innerHTML = '';
 
-  if (isPackaged) {
-    // ── Packaged mode: first three are always bundled, check Tesseract last ──
-    for (const c of PACKAGED_CHECKS) list.appendChild(makeCheckRow(c.id, c.label));
-    sub.textContent = 'Checking components...';
+  let allOk = false;
 
-    await sleep(280);
-    setCheckRow('vision',  true, 'BUNDLED');
-    await sleep(180);
-    setCheckRow('engine',  true, 'BUNDLED');
-    await sleep(180);
-    setCheckRow('overlay', true, 'BUNDLED');
-    await sleep(200);
+  try {
+    if (state.packaged) {
+      for (const c of PACKAGED_CHECKS) list.appendChild(makeCheckRow(c.id, c.label));
+      sub.textContent = 'Checking components...';
 
-    sub.textContent = 'Checking Tesseract OCR...';
-    const tess = await window.gp.checkTesseract();
+      await sleep(280);
+      setCheckRow('vision',  true, 'BUNDLED');
+      await sleep(180);
+      setCheckRow('engine',  true, 'BUNDLED');
+      await sleep(180);
+      setCheckRow('overlay', true, 'BUNDLED');
+      await sleep(200);
 
-    if (tess.ok) {
-      setCheckRow('tesseract', true, tess.version || 'INSTALLED');
-      sub.textContent = 'All components ready.';
-      status.textContent = '';
+      sub.textContent = 'Checking Tesseract OCR...';
+      const tess = await withTimeout(window.gp.checkTesseract());
+
+      if (tess.ok) {
+        setCheckRow('tesseract', true, tess.version || 'INSTALLED');
+        sub.textContent    = 'All components ready.';
+        status.textContent = '';
+        allOk = true;
+      } else {
+        setCheckRow('tesseract', false, 'NOT FOUND');
+        sub.textContent    = 'Tesseract OCR is required for game detection.';
+        status.textContent = 'Required for reading HP and credit values from screen.';
+        document.getElementById('tess-area').style.display = 'block';
+      }
+
     } else {
-      setCheckRow('tesseract', false, 'NOT FOUND');
-      sub.textContent = 'Tesseract OCR is required for game detection.';
-      status.textContent = 'Required for reading HP and credit values from screen.';
-      document.getElementById('tess-area').style.display = 'block';
+      for (const c of DEV_CHECKS) list.appendChild(makeCheckRow(c.id, c.label));
+      sub.textContent = 'Scanning environment...';
+
+      const results = await withTimeout(window.gp.checkDeps());
+      allOk = true;
+
+      for (const c of DEV_CHECKS) {
+        const r  = results[c.key];
+        const ok = c.isOk(r);
+        if (!ok) allOk = false;
+        setCheckRow(c.id, ok, c.detail(r));
+      }
+
+      sub.textContent    = allOk ? 'All requirements satisfied.' : 'Some requirements are missing.';
+      status.textContent = '';
+
+      if (!results.packages?.allOk) document.getElementById('pip-area').style.display  = 'block';
+      if (!results.tesseract?.ok)   document.getElementById('tess-area').style.display = 'block';
     }
+  } catch (err) {
+    sub.textContent    = 'Check failed: ' + err.message;
+    status.textContent = 'Click [A] Continue to skip or try again.';
+    allOk = false;
+  }
 
-  } else {
-    // ── Dev mode: real dep check ──────────────────────────────────────────────
-    for (const c of DEV_CHECKS) list.appendChild(makeCheckRow(c.id, c.label));
-    sub.textContent = 'Scanning environment...';
+  state.busy       = false;
+  btnNext.disabled = false;
 
-    const results = await window.gp.checkDeps();
-    let allOk = true;
-
-    for (const c of DEV_CHECKS) {
-      const r  = results[c.key];
-      const ok = c.isOk(r);
-      if (!ok) allOk = false;
-      setCheckRow(c.id, ok, c.detail(r));
-    }
-
-    sub.textContent    = allOk ? 'All requirements satisfied.' : 'Some requirements are missing.';
-    status.textContent = '';
-
-    if (!results.packages?.allOk) {
-      document.getElementById('pip-area').style.display = 'block';
-    }
-    if (!results.tesseract?.ok) {
-      document.getElementById('tess-area').style.display = 'block';
-    }
+  if (allOk) {
+    await sleep(600);
+    if (state.step === 1) goTo(2);
   }
 }
 
@@ -200,63 +225,112 @@ function setCheckRow(id, ok, detail = '') {
 // ── Tesseract auto-install ────────────────────────────────────────────────────
 
 document.getElementById('btn-install-tess').addEventListener('click', async function () {
+  if (state.busy) return;
+  state.busy    = true;
   this.disabled = true;
-  const prog   = document.getElementById('tess-progress');
-  const sub    = document.getElementById('check-sub');
-  const status = document.getElementById('check-status');
+
+  const prog    = document.getElementById('tess-progress');
+  const fill    = document.getElementById('tess-fill');
+  const sub     = document.getElementById('check-sub');
+  const status  = document.getElementById('check-status');
+  const manualBtn = document.getElementById('btn-tess-manual');
 
   const bdg = document.getElementById('cb-tesseract');
   if (bdg) { bdg.className = 'check-badge checking'; bdg.textContent = '[ .... ]'; }
 
-  window.gp.onTessProgress(({ type, pct }) => {
+  // Reset fill
+  fill.className = 'install-bar-fill';
+  fill.style.width = '0%';
+
+  const unsub = window.gp.onTessProgress(({ type, pct }) => {
     if (type === 'download') {
       prog.textContent = `DOWNLOADING... ${pct}%`;
+      fill.style.width = `${pct}%`;
     } else if (type === 'installing') {
       prog.textContent = 'INSTALLING TESSERACT OCR...';
+      fill.style.width = '95%';
     }
   });
 
-  const result = await window.gp.installTesseract();
+  let result;
+  try {
+    result = await withTimeout(window.gp.installTesseract(), 150_000);
+  } catch (err) {
+    result = { ok: false, error: err.message };
+  }
+  unsub();
 
   if (result.ok) {
     prog.textContent = 'INSTALLATION COMPLETE';
+    fill.className   = 'install-bar-fill done';
     setCheckRow('tesseract', true, result.version || 'INSTALLED');
     sub.textContent    = 'All components ready.';
     status.textContent = '';
     this.style.display = 'none';
+    state.busy = false;
+    await sleep(600);
+    if (state.step === 1) goTo(2);
   } else {
-    prog.textContent = 'INSTALL FAILED';
-    status.textContent = 'Visit: github.com/UB-Mannheim/tesseract to install manually.';
+    prog.textContent     = 'INSTALL FAILED';
+    fill.className       = 'install-bar-fill error';
+    fill.style.width     = '100%';
+    status.textContent   = 'Auto-install failed. Download manually below.';
+    manualBtn.style.display = 'block';
     setCheckRow('tesseract', false, 'MANUAL INSTALL NEEDED');
     this.disabled    = false;
-    this.textContent = '&#x25BA; Retry installation';
+    this.textContent = '\u25BA Retry installation';
+    state.busy = false;
   }
+});
+
+document.getElementById('btn-tess-manual').addEventListener('click', () => {
+  window.gp.openExternal(
+    'https://github.com/UB-Mannheim/tesseract/releases/latest'
+  );
 });
 
 // ── Pip install (dev mode) ────────────────────────────────────────────────────
 
 document.getElementById('btn-install-pips').addEventListener('click', async function () {
+  if (state.busy) return;
+  state.busy    = true;
   this.disabled = true;
+
   const prog = document.getElementById('pip-progress');
+  const fill = document.getElementById('pip-fill');
   let lastMsg = '';
 
-  window.gp.onInstallProgress(({ text }) => {
+  fill.className   = 'install-bar-fill';
+  fill.style.width = '10%';
+
+  const unsub = window.gp.onInstallProgress(({ text }) => {
     if (text && text !== lastMsg) {
       lastMsg = text;
       prog.textContent = text.substring(0, 60).toUpperCase();
     }
   });
 
-  const result = await window.gp.installPips();
+  let result;
+  try {
+    result = await withTimeout(window.gp.installPips(), 120_000);
+  } catch (err) {
+    result = { ok: false, error: err.message };
+  }
+  unsub();
 
   if (result.ok) {
     prog.textContent = 'PACKAGES INSTALLED SUCCESSFULLY';
+    fill.className   = 'install-bar-fill done';
     this.style.display = 'none';
-    depsChecked = false;
+    state.depsChecked  = false;
+    state.busy         = false;
     setTimeout(() => runSystemCheck(), 400);
   } else {
     prog.textContent = 'INSTALL FAILED -- RUN pip MANUALLY';
+    fill.className   = 'install-bar-fill error';
+    fill.style.width = '100%';
     this.disabled    = false;
+    state.busy       = false;
   }
 });
 
@@ -269,8 +343,8 @@ function selectGame(row) {
   });
   row.classList.add('sel');
   row.querySelector('.game-cur').textContent = '\u25BA';
-  selectedGame = row.dataset.game;
-  window.gp.setProfile(selectedGame);
+  state.game = row.dataset.game;
+  window.gp.setProfile(state.game);
 }
 
 document.querySelectorAll('.game-row:not(.off)').forEach(row => {
@@ -286,11 +360,9 @@ function selectRes(row) {
   });
   row.classList.add('sel');
   row.querySelector('.res-cur').textContent = '\u25BA';
-  selectedRes = row.dataset.res;
-  window.gp.setResolution(selectedRes);
-
-  const warn = document.getElementById('res-warning');
-  warn.classList.toggle('show', selectedRes !== '1920x1080');
+  state.res = row.dataset.res;
+  window.gp.setResolution(state.res);
+  document.getElementById('res-warning').classList.toggle('show', state.res !== '1920x1080');
 }
 
 document.querySelectorAll('.res-row').forEach(row => {
@@ -300,25 +372,40 @@ document.querySelectorAll('.res-row').forEach(row => {
 // ── Launch (Step 4) ───────────────────────────────────────────────────────────
 
 async function launch() {
+  if (state.busy) return;
+  state.busy          = true;
   btnNext.disabled    = true;
   btnNext.textContent = 'LOADING...';
-  await window.gp.complete();
-}
 
-// ── Utils ─────────────────────────────────────────────────────────────────────
+  let result;
+  try {
+    result = await withTimeout(window.gp.complete());
+  } catch (err) {
+    result = { ok: false, error: err.message };
+  }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-function esc(str) {
-  return String(str).replace(/[<>&"]/g, c =>
-    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])
-  );
+  if (!result.ok) {
+    btnNext.disabled    = false;
+    btnNext.textContent = '[A] Launch';
+    state.busy          = false;
+    const status = document.getElementById('check-status');
+    if (status) status.textContent = 'STARTUP ERROR: ' + (result.error || 'Unknown error');
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
-  isPackaged = await window.gp.isPackaged();
+  state.packaged = await window.gp.isPackaged();
+
+  // Auto-detect resolution from primary display
+  try {
+    const { width, height } = await withTimeout(window.gp.getResolution());
+    const detected = `${width}x${height}`;
+    const matchRow = document.querySelector(`.res-row[data-res="${detected}"]`);
+    if (matchRow) selectRes(matchRow);
+  } catch { /* keep 1920x1080 default */ }
+
   goTo(0);
 }
 

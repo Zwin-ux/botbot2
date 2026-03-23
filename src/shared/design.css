@@ -1,0 +1,239 @@
+/**
+ * GamePartner Design System — NES hardware-accurate
+ * ═══════════════════════════════════════════════════
+ * Single source of truth for the entire application.
+ *
+ * Rules:
+ *   1. Font  — 'Courier New' only. Never anything else.
+ *   2. AA    — Always off (-webkit-font-smoothing: none).
+ *   3. Anim  — steps() only. No ease, no linear.
+ *   4. Shape — No border-radius. Hard corners everywhere.
+ *   5. Imgs  — image-rendering: pixelated for all sprites.
+ *   6. Names — All user-facing text is UPPERCASE.
+ */
+
+/* ── Palette ─────────────────────────────────────────────────────────────────
+   NES PPU approximations for NTSC output on a typical display.
+   Canonical names are --gp-*. Old aliases kept for compatibility.
+   ──────────────────────────────────────────────────────────────────────── */
+:root {
+  --gp-bg:     #060830;   /* deep navy       — window background         */
+  --gp-panel:  #10105C;   /* dark blue       — panel interior            */
+  --gp-panel2: #1A1A80;   /* mid blue        — header / footer           */
+  --gp-border: #F8F8F8;   /* near-white      — all borders + body text   */
+  --gp-dim:    #38387C;   /* muted purple    — inactive / disabled       */
+  --gp-dark:   #404068;   /* very dim        — hints, subtitles          */
+  --gp-gray:   #9898C8;   /* medium blue     — secondary text            */
+  --gp-gold:   #F8C038;   /* NES $28 yellow  — cursor, accent, CTAs      */
+  --gp-green:  #38C840;   /* NES $1A         — success, active           */
+  --gp-red:    #E83030;   /* NES $06         — error, critical           */
+  --gp-orange: #FC7848;   /* NES $17         — warning, install          */
+  --gp-cyan:   #3CBCFC;   /* NES $21         — info, hotkey labels       */
+
+  /* Legacy aliases — keep old var(--bg) etc. working during migration */
+  --bg: var(--gp-bg); --panel: var(--gp-panel); --panel2: var(--gp-panel2);
+  --border: var(--gp-border); --dim: var(--gp-dim); --dark: var(--gp-dark);
+  --gray: var(--gp-gray); --cursor: var(--gp-gold); --text: var(--gp-border);
+  --green: var(--gp-green); --red: var(--gp-red);
+  --orange: var(--gp-orange); --cyan: var(--gp-cyan);
+
+  /* ── Typography scale ── */
+  --gp-font:    'Courier New', Courier, monospace;
+  --gp-xs:  9px;
+  --gp-sm: 10px;
+  --gp-md: 11px;
+  --gp-lg: 13px;
+  --gp-xl: 15px;
+  --gp-2xl:22px;
+
+  /* ── Spacing ── */
+  --gp-sp-xs:  4px;
+  --gp-sp-sm:  8px;
+  --gp-sp-md: 12px;
+  --gp-sp-lg: 16px;
+  --gp-sp-xl: 24px;
+}
+
+/* ── Base reset ──────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box; margin: 0; padding: 0;
+  -webkit-font-smoothing: none; font-smooth: never;
+}
+
+/* ── CRT scanline texture — applied via body.gp-window ──────────────────── */
+body.gp-window {
+  background: var(--gp-bg);
+  font-family: var(--gp-font);
+  font-size: var(--gp-md);
+  color: var(--gp-border);
+  user-select: none;
+  overflow: hidden;
+}
+body.gp-window::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px, transparent 1px,
+    rgba(0,0,0,0.06) 1px, rgba(0,0,0,0.06) 2px
+  );
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes gp-blink       { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes gp-icon-pulse  { 0%,100% { background: var(--gp-gold); } 50% { background: var(--gp-dim); } }
+@keyframes gp-flash-ok    { 0%,100% { background: var(--gp-panel); } 50% { background: #0C280C; } }
+@keyframes gp-step-in     { from { opacity: 0; } to   { opacity: 1; } }
+@keyframes gp-press-dots  {
+  0%   { content: '.  '; }
+  33%  { content: '.. '; }
+  66%  { content: '...'; }
+  100% { content: '.  '; }
+}
+
+.gp-blink { animation: gp-blink 1s step-end infinite; }
+
+/* ── NES double-border panel ─────────────────────────────────────────────── */
+.gp-panel {
+  background: var(--gp-panel);
+  border: 2px solid var(--gp-border);
+  box-shadow: 0 0 0 2px var(--gp-bg), 0 0 0 4px var(--gp-border);
+}
+
+/* ── Horizontal rule ─────────────────────────────────────────────────────── */
+.gp-rule {
+  width: 100%; height: 1px;
+  background: var(--gp-dim);
+  flex-shrink: 0;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.gp-btn {
+  background: var(--gp-panel2);
+  border: 2px solid var(--gp-border); color: var(--gp-border);
+  font: bold var(--gp-sm) var(--gp-font);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  padding: 5px 13px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  white-space: nowrap;
+}
+.gp-btn:hover:not(:disabled)  { border-color: var(--gp-gold);  color: var(--gp-gold);   }
+.gp-btn:active:not(:disabled) {
+  box-shadow: inset 1px 1px 0 rgba(0,0,0,0.4), inset -1px -1px 0 rgba(255,255,255,0.05);
+}
+.gp-btn.primary { border-color: var(--gp-gold);   color: var(--gp-gold);   }
+.gp-btn.primary:hover:not(:disabled)  { background: #14144A; }
+.gp-btn.danger  { border-color: var(--gp-orange); color: var(--gp-orange); }
+.gp-btn.danger:hover:not(:disabled)   { background: #1A0C04; }
+.gp-btn.block   { width: 100%; }
+.gp-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Selectable list row ─────────────────────────────────────────────────── */
+.gp-row {
+  display: flex; align-items: center; gap: var(--gp-sp-sm);
+  padding: 10px 12px;
+  background: var(--gp-panel); border: 1px solid var(--gp-dim);
+  cursor: pointer;
+  font-family: var(--gp-font);
+}
+.gp-row:hover:not(.off) { border-color: var(--gp-gray); }
+.gp-row.sel  { border-color: var(--gp-gold); background: #0C0C44; }
+.gp-row.off  { opacity: 0.38; cursor: not-allowed; pointer-events: none; }
+.gp-row-cur  { color: var(--gp-gold); width: 14px; flex-shrink: 0; }
+.gp-row-name { flex: 1; font: bold var(--gp-md) var(--gp-font); text-transform: uppercase; letter-spacing: 0.1em; }
+.gp-row.sel .gp-row-name { color: var(--gp-gold); }
+.gp-row-tag  { font-size: var(--gp-xs); color: var(--gp-gray); }
+.gp-row-badge { font: bold var(--gp-xs) var(--gp-font); letter-spacing: 0.04em; }
+.gp-row-badge.ready { color: var(--gp-green); }
+.gp-row-badge.soon  { color: var(--gp-dim); }
+.gp-row-badge.ok    { color: var(--gp-green); }
+
+/* ── System check rows ───────────────────────────────────────────────────── */
+.gp-check {
+  display: flex; align-items: center;
+  padding: 9px 12px;
+  background: var(--gp-panel); border: 1px solid var(--gp-dim);
+}
+.gp-check.ok   { border-color: #1A381A; animation: gp-flash-ok 0.4s steps(2); }
+.gp-check.fail { border-color: #381A1A; }
+
+.gp-check-icon {
+  width: 8px; height: 8px; flex-shrink: 0;
+  background: var(--gp-dim); margin-right: 10px;
+}
+.gp-check.ok      .gp-check-icon { background: var(--gp-green); }
+.gp-check.fail    .gp-check-icon { background: var(--gp-red);   }
+.gp-check.running .gp-check-icon { animation: gp-icon-pulse 0.7s step-end infinite; }
+
+.gp-check-label {
+  flex: 1; font: bold var(--gp-sm) var(--gp-font);
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--gp-gray);
+}
+.gp-check.ok .gp-check-label { color: var(--gp-border); }
+
+.gp-check-detail {
+  font-size: var(--gp-xs); color: var(--gp-dark);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  max-width: 155px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; margin-right: 10px;
+}
+.gp-check.ok .gp-check-detail { color: var(--gp-dim); }
+
+.gp-check-badge {
+  font: bold var(--gp-sm) var(--gp-font);
+  min-width: 70px; text-align: right; letter-spacing: 0.04em;
+}
+.gp-check-badge.ok      { color: var(--gp-green); }
+.gp-check-badge.fail    { color: var(--gp-red);   }
+.gp-check-badge.running { color: var(--gp-dim);   }
+
+/* ── Progress bar ────────────────────────────────────────────────────────── */
+.gp-progress {
+  width: 100%; height: 10px;
+  background: var(--gp-panel); border: 1px solid var(--gp-dim);
+  overflow: hidden;
+}
+.gp-progress-fill {
+  height: 100%; width: 0%;
+  background: var(--gp-gold);
+  transition: width 0.12s steps(8, end);
+}
+.gp-progress-fill.done  { background: var(--gp-green); width: 100%; }
+.gp-progress-fill.error { background: var(--gp-red); }
+
+/* ── Footer progress segments ────────────────────────────────────────────── */
+.gp-seg-bar { display: flex; gap: 4px; align-items: center; }
+.gp-seg     { width: 28px; height: 5px; background: var(--gp-dim);  }
+.gp-seg.on  { background: var(--gp-gold); }
+
+/* ── Overlay alert feed ──────────────────────────────────────────────────── */
+.gp-alert {
+  display: flex; align-items: flex-start;
+  padding: 6px 8px;
+  border-left: 3px solid var(--gp-dim);
+  font-size: var(--gp-md); line-height: 1.4;
+  color: var(--gp-gray); letter-spacing: 0.02em;
+  background: var(--gp-panel);
+  animation: gp-step-in 0.1s steps(2) forwards;
+}
+.gp-alert + .gp-alert { border-top: 1px solid var(--gp-dim); }
+.gp-alert-pfx {
+  flex-shrink: 0; margin-right: 6px;
+  font-size: var(--gp-sm); font-weight: bold;
+}
+.gp-alert.critical { border-left-color: var(--gp-red);    background: #1C0808; color: #FCA0A0; }
+.gp-alert.high     { border-left-color: var(--gp-orange); background: #1C1008; color: #FDB888; }
+.gp-alert.medium   { border-left-color: var(--gp-gold);  }
+.gp-alert.low      { border-left-color: var(--gp-cyan);  }
+.gp-alert.critical .gp-alert-pfx { color: var(--gp-red);    }
+.gp-alert.high     .gp-alert-pfx { color: var(--gp-orange); }
+.gp-alert.medium   .gp-alert-pfx { color: var(--gp-gold);  }
+.gp-alert.low      .gp-alert-pfx { color: var(--gp-cyan);  }
+
+/* ── Warning banner ──────────────────────────────────────────────────────── */
+.gp-warning {
+  padding: 8px 12px;
+  background: #1C100A; border: 1px solid var(--gp-orange);
+  font-size: var(--gp-xs); color: var(--gp-orange);
+  text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.6;
+}

@@ -35,7 +35,7 @@ function showConnecting() {
   const el = document.createElement('div');
   el.id        = 'connecting-msg';
   el.className = 'alert info';
-  el.innerHTML = '<span class="alert-pfx">   </span>CONNECTING TO GAME...';
+  el.innerHTML = '<span class="alert-pfx">   </span>START VALORANT TO ACTIVATE';
   feed.appendChild(el);
   // Blink until first event
   el._blink = setInterval(() => {
