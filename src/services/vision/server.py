@@ -54,7 +54,8 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-_CONFIG_PATH = os.path.join(_THIS_DIR, "../../../config/default.json")
+_CONFIG_PATH = (os.environ.get('GP_CONFIG_PATH')
+                or os.path.join(_THIS_DIR, "../../../config/default.json"))
 with open(_CONFIG_PATH, encoding="utf-8") as _f:
     CONFIG = json.load(_f)
 

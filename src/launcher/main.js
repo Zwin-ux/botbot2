@@ -1,16 +1,28 @@
 'use strict';
 
 const {
-  app, BrowserWindow, ipcMain, Tray, Menu, nativeImage,
+  app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, globalShortcut,
 } = require('electron');
 const path               = require('path');
 const fs                 = require('fs');
+const os                 = require('os');
+const https              = require('https');
+const http               = require('http');
 const { spawnSync, spawn } = require('child_process');
 const log                = require('electron-log');
 
 const { Orchestrator }           = require('./orchestrator');
 const { createOverlayWindow }    = require('../overlay/window');
 const { createOnboardingWindow } = require('../onboarding/window');
+
+// ── Tesseract installer (UB-Mannheim, tested release) ─────────────────────────
+const TESSERACT_URL = [
+  'https://github.com/UB-Mannheim/tesseract/releases/download',
+  'v5.3.3.20231005',
+  'tesseract-ocr-w64-setup-5.3.3.20231005.exe',
+].join('/');
+
+const TESSERACT_DEFAULT_DIR = 'C:\\Program Files\\Tesseract-OCR';
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -49,7 +61,6 @@ app.whenReady().then(async () => {
   log.info('GamePartner starting…');
 
   if (!isSetupComplete()) {
-    // First run: show NES onboarding wizard; services start after completion
     onboardingWindow = createOnboardingWindow();
     registerOnboardingIPC();
     createTray({ hasOverlay: false });
@@ -64,13 +75,18 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
   log.info('GamePartner shutting down…');
+  globalShortcut.unregisterAll();
   if (orchestrator) await orchestrator.stopAll();
 });
 
 // ── Core app launch ───────────────────────────────────────────────────────────
 
 async function launchApp() {
-  orchestrator = new Orchestrator({ isDev });
+  orchestrator = new Orchestrator({
+    isDev,
+    isPackaged:    app.isPackaged,
+    resourcesPath: process.resourcesPath,
+  });
   registerOverlayIPC(orchestrator);
 
   try {
@@ -82,12 +98,57 @@ async function launchApp() {
 
   overlayWindow = createOverlayWindow();
   createTray({ hasOverlay: true });
+
+  // Global shortcut: Ctrl+Shift+G toggles the overlay
+  globalShortcut.register('CommandOrControl+Shift+G', () => {
+    if (!overlayWindow) return;
+    overlayWindow.isVisible() ? overlayWindow.hide() : overlayWindow.show();
+  });
 }
 
 // ── IPC: onboarding ───────────────────────────────────────────────────────────
 
 function registerOnboardingIPC() {
+  ipcMain.handle('app:isPackaged', () => app.isPackaged);
+
   ipcMain.handle('onboarding:checkDeps', () => checkDependencies());
+
+  ipcMain.handle('onboarding:checkTesseract', () => checkTesseract());
+
+  ipcMain.handle('onboarding:installTesseract', async (event) => {
+    const existing = checkTesseract();
+    if (existing.ok) return { ok: true, version: existing.version };
+
+    const tmpExe = path.join(os.tmpdir(), 'gp_tesseract_setup.exe');
+
+    try {
+      log.info('[setup] Downloading Tesseract installer…');
+      await downloadFile(TESSERACT_URL, tmpExe, (pct) => {
+        event.sender.send('tess:progress', { type: 'download', pct });
+      });
+
+      log.info('[setup] Running silent Tesseract install…');
+      event.sender.send('tess:progress', { type: 'installing' });
+
+      await new Promise((resolve, reject) => {
+        const child = spawn(tmpExe, ['/S', '/NORESTART'], { windowsHide: true });
+        const timer = setTimeout(() => { child.kill(); reject(new Error('Install timed out')); }, 120_000);
+        child.on('close', (code) => { clearTimeout(timer); resolve(code); });
+        child.on('error', (err)  => { clearTimeout(timer); reject(err); });
+      });
+
+      try { fs.unlinkSync(tmpExe); } catch {}
+
+      const after = checkTesseract();
+      log.info(`[setup] Tesseract installed: ${JSON.stringify(after)}`);
+      return { ok: after.ok, version: after.version || 'installed' };
+
+    } catch (err) {
+      log.error('[setup] Tesseract install failed:', err.message);
+      try { fs.unlinkSync(tmpExe); } catch {}
+      return { ok: false, error: err.message };
+    }
+  });
 
   ipcMain.handle('onboarding:installPips', (event) => {
     return new Promise((resolve) => {
@@ -111,6 +172,22 @@ function registerOnboardingIPC() {
     return { ok: true };
   });
 
+  ipcMain.handle('onboarding:setResolution', (_, resolution) => {
+    try {
+      const cfgPath = path.join(app.getPath('userData'), 'user-config.json');
+      const existing = fs.existsSync(cfgPath)
+        ? JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+        : {};
+      existing.resolution = resolution;
+      fs.writeFileSync(cfgPath, JSON.stringify(existing, null, 2));
+      log.info(`[onboarding] Resolution set: ${resolution}`);
+      return { ok: true };
+    } catch (err) {
+      log.warn('Could not save resolution:', err.message);
+      return { ok: false };
+    }
+  });
+
   ipcMain.handle('onboarding:complete', async () => {
     markSetupComplete();
     if (onboardingWindow && !onboardingWindow.isDestroyed()) {
@@ -128,7 +205,6 @@ function registerOnboardingIPC() {
 // ── IPC: overlay + services ───────────────────────────────────────────────────
 
 function registerOverlayIPC(orch) {
-  // Guard: handlers survive app restarts within same process
   if (ipcMain.eventNames().includes('services:status')) return;
 
   ipcMain.handle('services:status', () => orch.getStatus());
@@ -147,7 +223,6 @@ function registerOverlayIPC(orch) {
     if (overlayWindow) overlayWindow.setIgnoreMouseEvents(value, { forward: true });
   });
 
-  // Forward filtered agent decisions → overlay
   orch.on('gameEvent', (event) => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.webContents.send('gameEvent', event);
@@ -160,12 +235,18 @@ function registerOverlayIPC(orch) {
 function createTray({ hasOverlay }) {
   if (tray) { tray.destroy(); tray = null; }
 
-  const icon = nativeImage.createEmpty();
+  const iconPath = path.join(__dirname, '../../assets/sprite.png');
+  let icon;
+  try {
+    icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  } catch {
+    icon = nativeImage.createEmpty();
+  }
   tray = new Tray(icon);
 
   const overlayItems = hasOverlay ? [
-    { label: 'Show Overlay', click: () => overlayWindow?.show() },
-    { label: 'Hide Overlay', click: () => overlayWindow?.hide() },
+    { label: 'Show Overlay',  click: () => overlayWindow?.show() },
+    { label: 'Hide Overlay',  click: () => overlayWindow?.hide() },
     { type: 'separator' },
     {
       label: 'Services',
@@ -213,7 +294,7 @@ function checkPython() {
 
 function checkTesseract() {
   const candidates = [
-    'C:\\Program Files\\Tesseract-OCR\\tesseract.exe',
+    path.join(TESSERACT_DEFAULT_DIR, 'tesseract.exe'),
     'C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe',
     'tesseract',
   ];
@@ -238,7 +319,6 @@ function checkPipPackages() {
     PIL:         'Pillow',
     requests:    'requests',
   };
-
   const checks = {};
   for (const [importName, pipName] of Object.entries(pkgs)) {
     try {
@@ -250,6 +330,39 @@ function checkPipPackages() {
       checks[pipName] = { ok: false };
     }
   }
-
   return { checks, allOk: Object.values(checks).every(c => c.ok) };
+}
+
+// ── Download helper (follows redirects) ──────────────────────────────────────
+
+function downloadFile(url, destPath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const follow = (current, hops = 0) => {
+      if (hops > 12) return reject(new Error('Too many redirects'));
+      const proto = current.startsWith('https') ? https : http;
+      const req = proto.get(current, { headers: { 'User-Agent': 'GamePartner-Setup/1.0' } }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          follow(res.headers.location, hops + 1);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          return reject(new Error(`HTTP ${res.statusCode}`));
+        }
+        const total  = parseInt(res.headers['content-length'] || '0', 10);
+        let received = 0;
+        const file   = fs.createWriteStream(destPath);
+        res.on('data', (chunk) => {
+          received += chunk.length;
+          if (!file.write(chunk)) { res.pause(); file.once('drain', () => res.resume()); }
+          if (total > 0 && onProgress) onProgress(Math.round(received / total * 100));
+        });
+        res.on('end',   () => file.end(resolve));
+        res.on('error', (e) => { file.destroy(); reject(e); });
+        file.on('error', reject);
+      });
+      req.on('error', reject);
+    };
+    follow(url);
+  });
 }

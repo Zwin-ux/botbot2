@@ -26,9 +26,34 @@ for (let i = 0; i < HP_SEGS; i++) {
   hpTrack.appendChild(seg);
 }
 
+// ── Connecting placeholder ────────────────────────────────────────────────────
+// Show a subtle waiting state until first game event arrives.
+
+let connected = false;
+
+function showConnecting() {
+  const el = document.createElement('div');
+  el.id        = 'connecting-msg';
+  el.className = 'alert info';
+  el.innerHTML = '<span class="alert-pfx">   </span>CONNECTING TO GAME...';
+  feed.appendChild(el);
+  // Blink until first event
+  el._blink = setInterval(() => {
+    el.style.opacity = el.style.opacity === '0' ? '1' : '0';
+  }, 600);
+}
+
+function clearConnecting() {
+  const el = document.getElementById('connecting-msg');
+  if (el) { clearInterval(el._blink); el.remove(); }
+}
+
+showConnecting();
+
 // ── Game event handler ────────────────────────────────────────────────────────
 
 window.gp.onGameEvent((event) => {
+  if (!connected) { connected = true; clearConnecting(); }
   conn.className = 'live';
 
   switch (event.type) {

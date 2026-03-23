@@ -1,54 +1,46 @@
 'use strict';
 
-// ── State ────────────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
 
 let currentStep  = 0;
 let selectedGame = 'valorant';
+let selectedRes  = '1920x1080';
 let depsChecked  = false;
+let isPackaged   = false;
 
-const TOTAL_STEPS  = 4;
-const STEP_LABELS  = ['START', 'CONTINUE', 'CONTINUE', 'LAUNCH'];
-const STEP_NAMES   = ['STEP 1 OF 4', 'STEP 2 OF 4', 'STEP 3 OF 4', 'STEP 4 OF 4'];
+const TOTAL_STEPS = 5;
+const STEP_NAMES  = ['STEP 1 OF 5', 'STEP 2 OF 5', 'STEP 3 OF 5', 'STEP 4 OF 5', 'STEP 5 OF 5'];
+const NEXT_LABELS = ['[A] Start', '[A] Continue', '[A] Continue', '[A] Continue', '[A] Launch'];
 
-// ── DOM refs ─────────────────────────────────────────────────────────────────
+// ── DOM refs ──────────────────────────────────────────────────────────────────
 
 const btnNext  = document.getElementById('btn-next');
 const btnBack  = document.getElementById('btn-back');
 const segBar   = document.getElementById('seg-bar');
 const stepLbl  = document.getElementById('step-label');
-const aKey     = document.getElementById('a-key');
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
 function goTo(n) {
   const next = Math.max(0, Math.min(TOTAL_STEPS - 1, n));
 
-  // Deactivate current step
-  const prevEl = document.getElementById(`s${currentStep}`);
-  if (prevEl) prevEl.classList.remove('active');
-
+  document.getElementById(`s${currentStep}`)?.classList.remove('active');
   currentStep = next;
+  document.getElementById(`s${currentStep}`)?.classList.add('active');
 
-  // Activate new step
-  const nextEl = document.getElementById(`s${currentStep}`);
-  if (nextEl) nextEl.classList.add('active');
-
-  // Update footer progress
-  const segs = segBar.querySelectorAll('.seg');
-  segs.forEach((s, i) => s.classList.toggle('on', i <= currentStep));
-  stepLbl.textContent = STEP_NAMES[currentStep];
-
-  // Update buttons
-  btnNext.textContent = STEP_LABELS[currentStep];
+  segBar.querySelectorAll('.seg').forEach((s, i) => s.classList.toggle('on', i <= currentStep));
+  stepLbl.textContent  = STEP_NAMES[currentStep];
+  btnNext.textContent  = NEXT_LABELS[currentStep];
   btnBack.style.display = currentStep > 0 ? 'inline-block' : 'none';
 
   if (currentStep === TOTAL_STEPS - 1) {
-    btnNext.classList.add('nes-btn-primary');
-    aKey.textContent = '[A]';
+    btnNext.classList.add('primary');
+  } else {
+    btnNext.classList.remove('primary');
   }
 
-  // Step-entry side effects
-  if (currentStep === 1 && !depsChecked) runDepCheck();
+  // Step entry side-effects
+  if (currentStep === 1 && !depsChecked) runSystemCheck();
 }
 
 btnNext.addEventListener('click', () => {
@@ -57,147 +49,226 @@ btnNext.addEventListener('click', () => {
 });
 btnBack.addEventListener('click', () => goTo(currentStep - 1));
 
-// Keyboard: arrow keys on game-select step, Enter for next
+// Keyboard navigation
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === 'a' || e.key === 'A') {
+  const k = e.key;
+
+  if (k === 'Enter' || k === 'a' || k === 'A') {
     if (currentStep === TOTAL_STEPS - 1) { launch(); return; }
     goTo(currentStep + 1);
   }
-  if ((e.key === 'b' || e.key === 'B' || e.key === 'Escape') && currentStep > 0) {
+  if ((k === 'b' || k === 'B' || k === 'Escape') && currentStep > 0) {
     goTo(currentStep - 1);
   }
+
   if (currentStep === 2) {
     const rows = [...document.querySelectorAll('.game-row:not(.off)')];
     const cur  = rows.findIndex(r => r.classList.contains('sel'));
-    if (e.key === 'ArrowDown' && cur < rows.length - 1) selectGame(rows[cur + 1]);
-    if (e.key === 'ArrowUp'   && cur > 0)               selectGame(rows[cur - 1]);
+    if (k === 'ArrowDown' && cur < rows.length - 1) selectGame(rows[cur + 1]);
+    if (k === 'ArrowUp'   && cur > 0)               selectGame(rows[cur - 1]);
+  }
+
+  if (currentStep === 3) {
+    const rows = [...document.querySelectorAll('.res-row')];
+    const cur  = rows.findIndex(r => r.classList.contains('sel'));
+    if (k === 'ArrowDown' && cur < rows.length - 1) selectRes(rows[cur + 1]);
+    if (k === 'ArrowUp'   && cur > 0)               selectRes(rows[cur - 1]);
   }
 });
 
-// ── Window controls ───────────────────────────────────────────────────────────
-
+// Window controls
 document.getElementById('btn-close').addEventListener('click', () => window.gp.close());
 document.getElementById('btn-min').addEventListener('click',   () => window.gp.minimize());
 
-// ── Dep check (Step 1) ────────────────────────────────────────────────────────
+// ── System Check (Step 1) ─────────────────────────────────────────────────────
 
-const DEP_META = [
-  { key: 'python',    label: 'Python 3.x',    icon: null },
-  { key: 'tesseract', label: 'Tesseract OCR',  icon: null },
-  { key: 'packages',  label: 'Vision Packages', icon: null,
-    isOk:    (r) => r.allOk,
-    subOk:   ()  => 'cv2 / pytesseract / mss / numpy',
-    subFail: (r) => {
-      const missing = Object.entries(r.checks)
-        .filter(([, v]) => !v.ok).map(([k]) => k).join(', ');
-      return `MISSING: ${missing}`;
-    },
+// Checks shown in packaged mode (everything bundled except Tesseract)
+const PACKAGED_CHECKS = [
+  { id: 'vision',    label: 'Vision Engine'    },
+  { id: 'engine',    label: 'Decision Engine'  },
+  { id: 'overlay',   label: 'Overlay Renderer' },
+  { id: 'tesseract', label: 'Tesseract OCR'    },
+];
+
+// Checks shown in dev mode (raw dep check)
+const DEV_CHECKS = [
+  {
+    key: 'python', id: 'python', label: 'Python 3.x',
+    isOk:   r => r.ok,
+    detail: r => r.ok ? (r.version || 'OK') : 'NOT FOUND',
+  },
+  {
+    key: 'tesseract', id: 'tesseract', label: 'Tesseract OCR',
+    isOk:   r => r.ok,
+    detail: r => r.ok ? (r.version || 'INSTALLED') : 'NOT FOUND',
+  },
+  {
+    key: 'packages', id: 'packages', label: 'Vision Packages',
+    isOk: r => r.allOk,
+    detail: r => r.allOk
+      ? 'cv2 / pytesseract / mss'
+      : 'MISSING: ' + Object.entries(r.checks || {}).filter(([, v]) => !v.ok).map(([k]) => k).join(', '),
   },
 ];
 
-async function runDepCheck() {
+async function runSystemCheck() {
   depsChecked = true;
-
-  const list = document.getElementById('dep-list');
+  const list   = document.getElementById('check-list');
+  const sub    = document.getElementById('check-sub');
+  const status = document.getElementById('check-status');
   list.innerHTML = '';
 
-  // Render all rows in "checking" state
-  for (const meta of DEP_META) {
-    list.appendChild(makeDepRow(meta));
-  }
+  if (isPackaged) {
+    // ── Packaged mode: first three are always bundled, check Tesseract last ──
+    for (const c of PACKAGED_CHECKS) list.appendChild(makeCheckRow(c.id, c.label));
+    sub.textContent = 'Checking components...';
 
-  const sub = document.getElementById('check-sub');
-  sub.textContent = 'Scanning environment\u2026';
+    await sleep(280);
+    setCheckRow('vision',  true, 'BUNDLED');
+    await sleep(180);
+    setCheckRow('engine',  true, 'BUNDLED');
+    await sleep(180);
+    setCheckRow('overlay', true, 'BUNDLED');
+    await sleep(200);
 
-  const results = await window.gp.checkDeps();
+    sub.textContent = 'Checking Tesseract OCR...';
+    const tess = await window.gp.checkTesseract();
 
-  let allOk = true;
-  for (const meta of DEP_META) {
-    const r    = results[meta.key];
-    const isOk = meta.isOk ? meta.isOk(r) : r.ok;
-    if (!isOk) allOk = false;
-
-    let detail;
-    if (isOk) {
-      detail = meta.subOk ? meta.subOk(r) : (r.version || 'OK');
+    if (tess.ok) {
+      setCheckRow('tesseract', true, tess.version || 'INSTALLED');
+      sub.textContent = 'All components ready.';
+      status.textContent = '';
     } else {
-      detail = meta.subFail ? meta.subFail(r) : 'NOT FOUND';
+      setCheckRow('tesseract', false, 'NOT FOUND');
+      sub.textContent = 'Tesseract OCR is required for game detection.';
+      status.textContent = 'Required for reading HP and credit values from screen.';
+      document.getElementById('tess-area').style.display = 'block';
     }
 
-    updateDepRow(meta.key, isOk, detail);
-  }
+  } else {
+    // ── Dev mode: real dep check ──────────────────────────────────────────────
+    for (const c of DEV_CHECKS) list.appendChild(makeCheckRow(c.id, c.label));
+    sub.textContent = 'Scanning environment...';
 
-  sub.textContent = allOk ? 'All requirements satisfied.' : 'Some requirements are missing.';
+    const results = await window.gp.checkDeps();
+    let allOk = true;
 
-  // Show pip-install button only if packages are missing
-  if (!results.packages?.allOk) {
-    const btn = document.getElementById('btn-install');
-    btn.style.display = 'block';
+    for (const c of DEV_CHECKS) {
+      const r  = results[c.key];
+      const ok = c.isOk(r);
+      if (!ok) allOk = false;
+      setCheckRow(c.id, ok, c.detail(r));
+    }
+
+    sub.textContent    = allOk ? 'All requirements satisfied.' : 'Some requirements are missing.';
+    status.textContent = '';
+
+    if (!results.packages?.allOk) {
+      document.getElementById('pip-area').style.display = 'block';
+    }
+    if (!results.tesseract?.ok) {
+      document.getElementById('tess-area').style.display = 'block';
+    }
   }
 }
 
-function makeDepRow(meta) {
+function makeCheckRow(id, label) {
   const el = document.createElement('div');
-  el.className = 'dep-row';
-  el.id = `dep-${meta.key}`;
+  el.className = 'check-row checking';
+  el.id = `cr-${id}`;
   el.innerHTML = `
-    <div class="dep-info" style="flex:1;min-width:0;">
-      <div class="dep-label" id="dlbl-${meta.key}">${meta.label.toUpperCase()}</div>
-      <div class="dep-version" id="dver-${meta.key}">checking<span class="spin-char"></span></div>
-    </div>
-    <div class="dep-badge checking" id="dbdg-${meta.key}">[ .... ]</div>
+    <div class="check-icon"></div>
+    <div class="check-label">${esc(label)}</div>
+    <div class="check-detail" id="cd-${id}">CHECKING...</div>
+    <div class="check-badge checking" id="cb-${id}">[ .... ]</div>
   `;
   return el;
 }
 
-function updateDepRow(key, ok, detail) {
-  const row  = document.getElementById(`dep-${key}`);
-  const ver  = document.getElementById(`dver-${key}`);
-  const bdg  = document.getElementById(`dbdg-${key}`);
+function setCheckRow(id, ok, detail = '') {
+  const row = document.getElementById(`cr-${id}`);
+  const det = document.getElementById(`cd-${id}`);
+  const bdg = document.getElementById(`cb-${id}`);
   if (!row) return;
-
+  row.classList.remove('checking');
   row.classList.add(ok ? 'ok' : 'fail');
-  ver.textContent  = detail.toUpperCase();
-  bdg.className    = `dep-badge ${ok ? 'ok' : 'fail'}`;
-  bdg.textContent  = ok ? '[  OK  ]' : '[ FAIL ]';
+  det.textContent = detail.toUpperCase().substring(0, 26);
+  bdg.className   = `check-badge ${ok ? 'ok' : 'fail'}`;
+  bdg.textContent = ok ? '[  OK  ]' : '[ FAIL ]';
 }
 
-// ── Pip install ───────────────────────────────────────────────────────────────
+// ── Tesseract auto-install ────────────────────────────────────────────────────
 
-document.getElementById('btn-install').addEventListener('click', async function () {
+document.getElementById('btn-install-tess').addEventListener('click', async function () {
   this.disabled = true;
-  this.classList.add('working');
+  const prog   = document.getElementById('tess-progress');
+  const sub    = document.getElementById('check-sub');
+  const status = document.getElementById('check-status');
 
-  const lbl = document.getElementById('install-label');
-  lbl.textContent = 'Installing\u2026';
+  const bdg = document.getElementById('cb-tesseract');
+  if (bdg) { bdg.className = 'check-badge checking'; bdg.textContent = '[ .... ]'; }
 
+  window.gp.onTessProgress(({ type, pct }) => {
+    if (type === 'download') {
+      prog.textContent = `DOWNLOADING... ${pct}%`;
+    } else if (type === 'installing') {
+      prog.textContent = 'INSTALLING TESSERACT OCR...';
+    }
+  });
+
+  const result = await window.gp.installTesseract();
+
+  if (result.ok) {
+    prog.textContent = 'INSTALLATION COMPLETE';
+    setCheckRow('tesseract', true, result.version || 'INSTALLED');
+    sub.textContent    = 'All components ready.';
+    status.textContent = '';
+    this.style.display = 'none';
+  } else {
+    prog.textContent = 'INSTALL FAILED';
+    status.textContent = 'Visit: github.com/UB-Mannheim/tesseract to install manually.';
+    setCheckRow('tesseract', false, 'MANUAL INSTALL NEEDED');
+    this.disabled    = false;
+    this.textContent = '&#x25BA; Retry installation';
+  }
+});
+
+// ── Pip install (dev mode) ────────────────────────────────────────────────────
+
+document.getElementById('btn-install-pips').addEventListener('click', async function () {
+  this.disabled = true;
+  const prog = document.getElementById('pip-progress');
   let lastMsg = '';
+
   window.gp.onInstallProgress(({ text }) => {
     if (text && text !== lastMsg) {
       lastMsg = text;
-      lbl.textContent = text.substring(0, 56).toUpperCase();
+      prog.textContent = text.substring(0, 60).toUpperCase();
     }
   });
 
   const result = await window.gp.installPips();
 
   if (result.ok) {
-    lbl.textContent = 'Packages installed successfully';
-    this.classList.remove('working');
+    prog.textContent = 'PACKAGES INSTALLED SUCCESSFULLY';
     this.style.display = 'none';
-    setTimeout(() => runDepCheck(), 400);
+    depsChecked = false;
+    setTimeout(() => runSystemCheck(), 400);
   } else {
-    lbl.textContent = 'Install failed \u2014 run pip manually';
+    prog.textContent = 'INSTALL FAILED -- RUN pip MANUALLY';
     this.disabled    = false;
-    this.classList.remove('working');
   }
 });
 
 // ── Game selection (Step 2) ───────────────────────────────────────────────────
 
 function selectGame(row) {
-  document.querySelectorAll('.game-row').forEach(r => r.classList.remove('sel'));
+  document.querySelectorAll('.game-row').forEach(r => {
+    r.classList.remove('sel');
+    r.querySelector('.game-cur').textContent = '\u00a0';
+  });
   row.classList.add('sel');
+  row.querySelector('.game-cur').textContent = '\u25BA';
   selectedGame = row.dataset.game;
   window.gp.setProfile(selectedGame);
 }
@@ -206,14 +277,49 @@ document.querySelectorAll('.game-row:not(.off)').forEach(row => {
   row.addEventListener('click', () => selectGame(row));
 });
 
-// ── Launch (Step 3) ───────────────────────────────────────────────────────────
+// ── Resolution selection (Step 3) ─────────────────────────────────────────────
+
+function selectRes(row) {
+  document.querySelectorAll('.res-row').forEach(r => {
+    r.classList.remove('sel');
+    r.querySelector('.res-cur').textContent = '\u00a0';
+  });
+  row.classList.add('sel');
+  row.querySelector('.res-cur').textContent = '\u25BA';
+  selectedRes = row.dataset.res;
+  window.gp.setResolution(selectedRes);
+
+  const warn = document.getElementById('res-warning');
+  warn.classList.toggle('show', selectedRes !== '1920x1080');
+}
+
+document.querySelectorAll('.res-row').forEach(row => {
+  row.addEventListener('click', () => selectRes(row));
+});
+
+// ── Launch (Step 4) ───────────────────────────────────────────────────────────
 
 async function launch() {
   btnNext.disabled    = true;
-  btnNext.textContent = 'LOADING\u2026';
+  btnNext.textContent = 'LOADING...';
   await window.gp.complete();
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function esc(str) {
+  return String(str).replace(/[<>&"]/g, c =>
+    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])
+  );
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-goTo(0);
+async function init() {
+  isPackaged = await window.gp.isPackaged();
+  goTo(0);
+}
+
+init();

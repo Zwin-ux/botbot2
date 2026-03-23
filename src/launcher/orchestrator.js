@@ -1,3 +1,5 @@
+'use strict';
+
 const { EventEmitter } = require('events');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -5,17 +7,19 @@ const net = require('net');
 const log = require('electron-log');
 const config = require('../../config/default.json');
 
-// Time (ms) to wait between health-check polls during startup
 const HEALTH_POLL_INTERVAL = 500;
 const HEALTH_POLL_TIMEOUT  = 15_000;
+
+// Default Tesseract install path on Windows (UB Mannheim installer default)
+const TESSERACT_DEFAULT_DIR = 'C:\\Program Files\\Tesseract-OCR';
 
 class ServiceProcess extends EventEmitter {
   constructor(name, descriptor) {
     super();
     this.name = name;
-    this.descriptor = descriptor;    // { cmd, args, cwd, port, env }
+    this.descriptor = descriptor;
     this.process = null;
-    this.status = 'stopped';         // stopped | starting | running | crashed
+    this.status = 'stopped';
     this.restartTimer = null;
     this.autoRestart = config.services[name]?.autoRestart ?? false;
     this.restartDelay = config.services[name]?.restartDelay ?? 2000;
@@ -61,7 +65,7 @@ class ServiceProcess extends EventEmitter {
 
   async waitReady() {
     const port = this.descriptor.port;
-    if (!port) return;  // no port to probe — assume ready
+    if (!port) return;
 
     const deadline = Date.now() + HEALTH_POLL_TIMEOUT;
     while (Date.now() < deadline) {
@@ -87,74 +91,92 @@ class ServiceProcess extends EventEmitter {
 
   getStatus() {
     return {
-      name: this.name,
+      name:   this.name,
       status: this.status,
-      pid: this.process?.pid ?? null,
-      port: this.descriptor.port ?? null,
+      pid:    this.process?.pid ?? null,
+      port:   this.descriptor.port ?? null,
     };
   }
 }
 
 class Orchestrator extends EventEmitter {
-  constructor({ isDev = false } = {}) {
+  constructor({ isDev = false, isPackaged = false, resourcesPath = '' } = {}) {
     super();
-    this.isDev = isDev;
+    this.isDev         = isDev;
+    this.isPackaged    = isPackaged;
+    this.resourcesPath = resourcesPath;
     this.services = this._buildServiceMap();
   }
 
   _buildServiceMap() {
     const root = path.resolve(__dirname, '../..');
 
+    // ── Vision service: bundled exe in production, python script in dev ──────
+    let visionCmd, visionArgs, visionCwd, visionEnv = { PYTHONUNBUFFERED: '1' };
+
+    if (this.isPackaged) {
+      const visionResDir = path.join(this.resourcesPath, 'vision');
+      visionCmd  = path.join(visionResDir, 'vision_server.exe');
+      visionArgs = [];
+      visionCwd  = visionResDir;
+
+      // Point the bundled exe at the extracted config and profiles
+      visionEnv = {
+        PYTHONUNBUFFERED:  '1',
+        GP_CONFIG_PATH:    path.join(visionResDir, 'config', 'default.json'),
+        GP_PROFILES_PATH:  path.join(visionResDir, 'profiles'),
+        // Add Tesseract to PATH so pytesseract can find the binary
+        PATH:              `${TESSERACT_DEFAULT_DIR};${process.env.PATH || ''}`,
+        TESSDATA_PREFIX:   path.join(TESSERACT_DEFAULT_DIR, 'tessdata'),
+      };
+    } else {
+      visionCmd  = 'python';
+      visionArgs = [path.join(root, 'src/services/vision/server.py')];
+      visionCwd  = root;
+    }
+
     return {
       agent: new ServiceProcess('agent', {
-        cmd: 'node',
+        cmd:  'node',
         args: [path.join(root, 'src/services/agent/index.js')],
-        cwd: root,
+        cwd:  root,
         port: config.services.agent.port,
       }),
 
       vision: new ServiceProcess('vision', {
-        cmd: 'python',
-        args: [path.join(root, 'src/services/vision/server.py')],
-        cwd: root,
+        cmd:  visionCmd,
+        args: visionArgs,
+        cwd:  visionCwd,
         port: config.services.vision.port,
-        env: { PYTHONUNBUFFERED: '1' },
+        env:  visionEnv,
       }),
 
       storage: new ServiceProcess('storage', {
-        cmd: 'node',
+        cmd:  'node',
         args: [path.join(root, 'src/services/storage/index.js')],
-        cwd: root,
+        cwd:  root,
         port: config.services.storage.port,
       }),
     };
   }
 
   async startAll() {
-    // Start services in dependency order: storage → agent → vision
     const order = ['storage', 'agent', 'vision'];
     for (const name of order) {
       const svc = this.services[name];
       svc.start();
-
       svc.on('exit', () => this.emit('serviceExit', { name }));
-
       try {
         await svc.waitReady();
       } catch (err) {
         log.error(`[orchestrator] ${name} startup failed:`, err.message);
-        // Continue — degraded mode, not full crash
       }
     }
-
-    // Once agent is up, open its WebSocket event feed
     this._connectAgentFeed();
   }
 
   async stopAll() {
-    for (const svc of Object.values(this.services)) {
-      svc.stop();
-    }
+    for (const svc of Object.values(this.services)) svc.stop();
   }
 
   async restartService(name) {
@@ -172,8 +194,6 @@ class Orchestrator extends EventEmitter {
     return Object.values(this.services).map((s) => s.getStatus());
   }
 
-  // Subscribe to the agent's decision stream (filtered, scored — not raw telemetry)
-  // and re-emit on the orchestrator so the overlay gets only actionable outputs.
   _connectAgentFeed() {
     const { port, host } = config.services.agent;
     const WebSocket = require('ws');
@@ -181,27 +201,17 @@ class Orchestrator extends EventEmitter {
 
     const connect = () => {
       const ws = new WebSocket(url);
-
-      ws.on('open', () => log.info('[orchestrator] Agent event feed connected'));
-
+      ws.on('open',    () => log.info('[orchestrator] Agent event feed connected'));
       ws.on('message', (raw) => {
-        try {
-          const event = JSON.parse(raw);
-          this.emit('gameEvent', event);
-        } catch {
-          // malformed — ignore
-        }
+        try { this.emit('gameEvent', JSON.parse(raw)); } catch { /* malformed */ }
       });
-
-      ws.on('close', () => {
+      ws.on('close',   () => {
         log.warn('[orchestrator] Agent event feed disconnected — reconnecting in 3s');
         setTimeout(connect, 3000);
       });
-
-      ws.on('error', () => ws.terminate());
+      ws.on('error',   () => ws.terminate());
     };
 
-    // Delay first connect slightly to let the agent fully initialize
     setTimeout(connect, 1500);
   }
 }

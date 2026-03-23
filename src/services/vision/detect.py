@@ -64,8 +64,13 @@ MIN_CONFIDENCE = 0.30
 REFERENCE_RES = (1920, 1080)
 
 
+def _profiles_root() -> str:
+    return (os.environ.get('GP_PROFILES_PATH')
+            or os.path.join(os.path.dirname(__file__), '../../profiles'))
+
+
 def _load_profile(game: str) -> dict:
-    path = os.path.join(os.path.dirname(__file__), f"../../profiles/{game}/profile.json")
+    path = os.path.join(_profiles_root(), game, 'profile.json')
     try:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
@@ -79,9 +84,7 @@ def _load_detector(game: str):
     Dynamically import src/profiles/<game>/detector.py and return its `detect` function.
     Falls back to a stub that returns an empty dict.
     """
-    detector_path = os.path.join(
-        os.path.dirname(__file__), f"../../profiles/{game}/detector.py"
-    )
+    detector_path = os.path.join(_profiles_root(), game, 'detector.py')
     try:
         spec = importlib.util.spec_from_file_location(f"{game}_detector", detector_path)
         if spec is None:

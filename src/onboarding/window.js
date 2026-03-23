@@ -1,15 +1,17 @@
+'use strict';
+
 const { BrowserWindow } = require('electron');
 const path = require('path');
 
 function createOnboardingWindow() {
   const win = new BrowserWindow({
-    width:           560,
-    height:          460,
+    width:           580,
+    height:          520,
     resizable:       false,
     center:          true,
     frame:           false,
     transparent:     false,
-    backgroundColor: '#0b0b12',
+    backgroundColor: '#060830',
     show:            false,
     webPreferences: {
       preload:          path.join(__dirname, 'preload.js'),

@@ -3,531 +3,498 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
-  <title>GamePartner</title>
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
+  <title>GamePartner Setup</title>
   <style>
-    /* ═══════════════════════════════════════════════════════
-       NES HARDWARE-ACCURATE PALETTE
-       Based on NTSC NES PPU output values
-    ════════════════════════════════════════════════════════ */
+    /* ═══ NES hardware-accurate palette ═══ */
     :root {
-      --nes-bg:      #060830;  /* $01 dark — RPG title-screen navy            */
-      --nes-panel:   #10105C;  /* $02 panel — window interior                 */
-      --nes-panel2:  #1A1A80;  /* $11 slightly lighter panel                  */
-      --nes-border:  #F8F8F8;  /* $30 near-white — all borders                */
-      --nes-dim:     #38387C;  /* $02 dim — inactive/unfocused                */
-      --nes-text:    #F8F8F8;  /* $30 white text                              */
-      --nes-gray:    #9898C8;  /* $10 light — secondary text                  */
-      --nes-dark:    #404068;  /* dim inactive text                           */
-      --nes-cursor:  #F8C038;  /* $28 yellow — selection cursor / highlights  */
-      --nes-green:   #38C840;  /* $1A bright green — success / HP full        */
-      --nes-red:     #E83030;  /* $06 red — error / critical                  */
-      --nes-orange:  #FC7848;  /* $17 — warning / med HP                      */
-      --nes-cyan:    #3CBCFC;  /* $21 sky-blue — info                         */
-      --nes-purple:  #9848FC;  /* $24 — accent                                */
+      --bg:     #060830;
+      --panel:  #10105C;
+      --panel2: #1A1A80;
+      --border: #F8F8F8;
+      --dim:    #38387C;
+      --text:   #F8F8F8;
+      --gray:   #9898C8;
+      --dark:   #404068;
+      --cursor: #F8C038;
+      --green:  #38C840;
+      --red:    #E83030;
+      --orange: #FC7848;
+      --cyan:   #3CBCFC;
     }
 
-    /* ═══ Reset & base ═══ */
     *, *::before, *::after {
       box-sizing: border-box; margin: 0; padding: 0;
-      /* Disable sub-pixel AA for sharper monospace rendering */
-      -webkit-font-smoothing: none;
-      font-smooth: never;
+      -webkit-font-smoothing: none; font-smooth: never;
     }
 
-    html, body {
-      width: 560px; height: 460px;
-      overflow: hidden;
-      background: var(--nes-bg);
-      color: var(--nes-text);
-      /* Pixel / monospace stack */
+    body {
+      background: var(--bg);
       font-family: 'Courier New', Courier, monospace;
-      font-size: 12px;
-      line-height: 1.6;
+      font-size: 11px; color: var(--text);
       user-select: none;
+      width: 580px; height: 520px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
     }
 
-    /* ═══ Scanline CRT overlay ═══ */
+    /* CRT scanlines */
     body::after {
       content: '';
       position: fixed; inset: 0; z-index: 9999; pointer-events: none;
       background: repeating-linear-gradient(
-        0deg,
-        transparent 0px, transparent 1px,
+        0deg, transparent 0px, transparent 1px,
         rgba(0,0,0,0.06) 1px, rgba(0,0,0,0.06) 2px
       );
     }
 
-    /* ═══ NES double-border window ═══
-         Outer border → 4px gap → inner border
-    ═══ */
-    .nes-win {
-      border: 3px solid var(--nes-border);
-      box-shadow: 0 0 0 3px var(--nes-bg), 0 0 0 6px var(--nes-border);
-      background: var(--nes-panel);
-    }
-
-    /* ═══ Title bar ═══ */
+    /* ── Title bar ── */
     #titlebar {
-      height: 36px;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 12px;
-      background: var(--nes-panel);
-      border-bottom: 3px solid var(--nes-border);
+      height: 32px;
+      background: var(--panel2);
+      border-bottom: 2px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 10px;
       -webkit-app-region: drag;
-      letter-spacing: 0.08em;
-    }
-
-    .tb-title {
-      font-size: 11px; font-weight: bold;
-      color: var(--nes-cursor); text-transform: uppercase;
-      display: flex; align-items: center; gap: 8px;
-    }
-
-    .tb-caret { color: var(--nes-cursor); animation: blink 1s step-end infinite; }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0; }
-    }
-
-    .win-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
-    .win-btn {
-      width: 18px; height: 18px;
-      border: 2px solid var(--nes-border);
-      background: var(--nes-panel2); color: var(--nes-border);
-      font-family: 'Courier New', monospace; font-size: 10px; font-weight: bold;
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      transition: background 0.05s;
-    }
-    .win-btn:hover { background: var(--nes-dim); }
-    .win-btn:active { background: var(--nes-border); color: var(--nes-panel); }
-
-    /* ═══ App layout ═══ */
-    #app { display: flex; flex-direction: column; height: calc(100% - 36px); }
-
-    /* ═══ Viewport: steps ═══ */
-    #viewport { flex: 1; overflow: hidden; position: relative; }
-
-    .step {
-      display: none;
-      position: absolute; inset: 0;
-      padding: 20px 28px 12px;
-      flex-direction: column;
-    }
-    .step.active {
-      display: flex;
-      animation: nesIn 0.15s steps(4) forwards;
-    }
-
-    @keyframes nesIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
-    }
-
-    /* ════════════════════════════════════
-       STEP 0 — WELCOME
-    ════════════════════════════════════ */
-    .welcome-body {
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      height: 100%; gap: 0; text-align: center;
-    }
-
-    /* NES sprite-style logo block */
-    .sprite-box {
-      width: 64px; height: 64px;
-      border: 3px solid var(--nes-border);
-      background: var(--nes-panel2);
-      display: flex; align-items: center; justify-content: center;
-      margin-bottom: 16px;
-      position: relative;
-      box-shadow: 0 0 0 3px var(--nes-bg), 0 0 0 6px var(--nes-border);
-    }
-    /* pixel art G letter inside */
-    .sprite-box::before {
-      content: 'GP';
-      font-size: 18px; font-weight: bold;
-      color: var(--nes-cursor);
-      letter-spacing: -1px;
-    }
-
-    .welcome-title {
-      font-size: 18px; font-weight: bold;
-      text-transform: uppercase; letter-spacing: 0.12em;
-      color: var(--nes-text); margin-bottom: 6px;
-    }
-
-    .welcome-ver {
-      font-size: 10px; color: var(--nes-gray); margin-bottom: 20px;
-      text-transform: uppercase; letter-spacing: 0.1em;
-    }
-
-    .feat-grid {
-      display: flex; flex-direction: column; gap: 6px;
-      text-align: left; margin-bottom: 18px;
-    }
-    .feat-row {
-      display: flex; align-items: center; gap: 10px;
-      font-size: 11px; color: var(--nes-gray);
-      text-transform: uppercase; letter-spacing: 0.05em;
-    }
-    .feat-row::before {
-      content: '\25A0';  /* ■ */
-      color: var(--nes-cursor); font-size: 8px; flex-shrink: 0;
-    }
-
-    .press-start {
-      font-size: 11px; color: var(--nes-cursor);
-      text-transform: uppercase; letter-spacing: 0.15em;
-      animation: blink 0.9s step-end infinite;
-      margin-top: 4px;
-    }
-
-    /* ════════════════════════════════════
-       STEP 1 — SYSTEM CHECK
-    ════════════════════════════════════ */
-    .step-h {
-      font-size: 13px; font-weight: bold;
-      text-transform: uppercase; letter-spacing: 0.1em;
-      color: var(--nes-cursor); margin-bottom: 4px;
-    }
-    .step-sub {
-      font-size: 10px; color: var(--nes-gray); text-transform: uppercase;
-      letter-spacing: 0.05em; margin-bottom: 14px;
-    }
-
-    .dep-list {
-      display: flex; flex-direction: column; gap: 8px; flex: 1;
-    }
-
-    .dep-row {
-      border: 2px solid var(--nes-dim);
-      background: var(--nes-panel2);
-      padding: 8px 12px;
-      display: flex; align-items: center; gap: 12px;
-      opacity: 0;
-      animation: nesIn 0.1s steps(2) forwards;
-    }
-    .dep-row:nth-child(1) { animation-delay: 0.08s; }
-    .dep-row:nth-child(2) { animation-delay: 0.16s; }
-    .dep-row:nth-child(3) { animation-delay: 0.24s; }
-    .dep-row.ok   { border-color: var(--nes-green); }
-    .dep-row.fail { border-color: var(--nes-red); }
-
-    .dep-label {
-      flex: 1;
-      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
-      color: var(--nes-gray);
-    }
-    .dep-row.ok   .dep-label { color: var(--nes-text); }
-    .dep-row.fail .dep-label { color: var(--nes-text); }
-
-    .dep-version {
-      font-size: 10px; color: var(--nes-dark); margin-top: 2px;
-      text-transform: uppercase; letter-spacing: 0.04em;
-    }
-    .dep-row.ok .dep-version { color: var(--nes-gray); }
-
-    .dep-badge {
-      font-size: 10px; font-weight: bold; text-transform: uppercase;
-      letter-spacing: 0.05em; min-width: 80px; text-align: right;
-    }
-    .dep-badge.checking { color: var(--nes-gray); }
-    .dep-badge.ok       { color: var(--nes-green); }
-    .dep-badge.fail     { color: var(--nes-red); }
-
-    .dep-spin {
-      display: inline-block;
-      animation: spin 0.5s steps(4) infinite;
-    }
-    @keyframes spin {
-      0%   { content: '-'; }
-      25%  { content: '\\'; }
-      50%  { content: '|'; }
-      75%  { content: '/'; }
-    }
-    /* Use ::before trick for ASCII spinner */
-    .spin-char::before {
-      content: '-';
-      animation: spinChar 0.5s steps(4) infinite;
-    }
-    @keyframes spinChar {
-      0%   { content: '-'; }
-      25%  { content: '\\'; }
-      50%  { content: '|'; }
-      75%  { content: '/'; }
-    }
-
-    #btn-install {
-      display: none; margin-top: 10px;
-      border: 2px solid var(--nes-border); background: var(--nes-panel2);
-      color: var(--nes-text); font-family: 'Courier New', monospace;
-      font-size: 11px; font-weight: bold; text-transform: uppercase;
-      letter-spacing: 0.08em; padding: 8px 14px; cursor: pointer;
-      text-align: left; width: 100%;
-      transition: background 0.05s;
-    }
-    #btn-install::before { content: '[ '; color: var(--nes-cursor); }
-    #btn-install::after  { content: ' ]'; color: var(--nes-cursor); }
-    #btn-install:hover:not(:disabled)  { background: var(--nes-dim); }
-    #btn-install:disabled { opacity: 0.35; cursor: default; }
-    #btn-install.working { color: var(--nes-cursor); border-color: var(--nes-cursor); }
-
-    /* ════════════════════════════════════
-       STEP 2 — GAME SELECT
-    ════════════════════════════════════ */
-    .game-list { display: flex; flex-direction: column; gap: 6px; flex: 1; }
-
-    .game-row {
-      border: 2px solid var(--nes-dim);
-      background: var(--nes-panel2);
-      padding: 10px 14px;
-      display: flex; align-items: center; gap: 0;
-      cursor: pointer; position: relative;
-      transition: border-color 0.05s, background 0.05s;
-    }
-    .game-row:hover:not(.off) { border-color: var(--nes-cursor); }
-    .game-row.sel {
-      border-color: var(--nes-cursor);
-      background: var(--nes-panel);
-    }
-    .game-row.off { opacity: 0.30; cursor: default; }
-
-    .g-arrow {
-      width: 16px; font-size: 12px; font-weight: bold;
-      color: var(--nes-cursor); flex-shrink: 0;
-      opacity: 0;
-    }
-    .game-row.sel .g-arrow { opacity: 1; animation: blink 0.7s step-end infinite; }
-
-    .g-name {
-      flex: 1; font-size: 12px; font-weight: bold;
-      text-transform: uppercase; letter-spacing: 0.08em; color: var(--nes-gray);
-    }
-    .game-row.sel .g-name { color: var(--nes-text); }
-
-    .g-tag {
-      font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
-      padding: 2px 8px; border: 1px solid;
-    }
-    .g-tag.active { color: var(--nes-green); border-color: var(--nes-green); }
-    .g-tag.soon   { color: var(--nes-dark);  border-color: var(--nes-dark);  }
-
-    .select-hint {
-      margin-top: 12px; font-size: 10px; color: var(--nes-dark);
-      text-transform: uppercase; letter-spacing: 0.06em; text-align: center;
-    }
-
-    /* ════════════════════════════════════
-       STEP 3 — DONE
-    ════════════════════════════════════ */
-    .done-body {
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      height: 100%; text-align: center;
-    }
-
-    .done-box {
-      border: 3px solid var(--nes-green);
-      box-shadow: 0 0 0 3px var(--nes-bg), 0 0 0 6px var(--nes-green);
-      background: var(--nes-panel2);
-      padding: 10px 24px; margin-bottom: 18px;
-      animation: nesIn 0.2s steps(4) forwards;
-    }
-    .done-ok {
-      font-size: 16px; font-weight: bold;
-      text-transform: uppercase; letter-spacing: 0.15em;
-      color: var(--nes-green);
-    }
-
-    .done-title {
-      font-size: 14px; font-weight: bold;
-      text-transform: uppercase; letter-spacing: 0.12em;
-      color: var(--nes-text); margin-bottom: 14px;
-    }
-
-    .done-hints {
-      display: flex; flex-direction: column; gap: 6px;
-      text-align: left;
-      border: 2px solid var(--nes-dim); background: var(--nes-panel2);
-      padding: 10px 14px; margin-bottom: 14px; width: 100%;
-    }
-    .done-hints li {
-      list-style: none; font-size: 10px; color: var(--nes-gray);
-      text-transform: uppercase; letter-spacing: 0.04em;
-      display: flex; gap: 8px;
-    }
-    .done-hints li::before { content: '\25A0'; color: var(--nes-dim); font-size: 8px; }
-
-    .press-launch {
-      font-size: 11px; color: var(--nes-cursor);
-      text-transform: uppercase; letter-spacing: 0.15em;
-      animation: blink 0.9s step-end infinite;
-    }
-
-    /* ════════════════════════════════════
-       FOOTER — NAVIGATION
-    ════════════════════════════════════ */
-    #footer {
-      height: 46px; display: flex; align-items: center;
-      justify-content: space-between; padding: 0 28px;
-      border-top: 3px solid var(--nes-border);
-      background: var(--nes-panel);
       flex-shrink: 0;
     }
-
-    /* Segmented progress bar */
-    .seg-bar { display: flex; align-items: center; gap: 4px; }
-    .seg {
-      width: 14px; height: 10px;
-      background: var(--nes-dark);
+    .tb-dot { width: 7px; height: 7px; background: var(--green); margin-right: 8px; }
+    .tb-title {
+      font: bold 10px 'Courier New', monospace;
+      text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--cursor); flex: 1;
     }
-    .seg.on { background: var(--nes-cursor); }
+    .tb-btn {
+      -webkit-app-region: no-drag;
+      background: none; border: 1px solid var(--dim);
+      color: var(--gray); font: bold 10px 'Courier New', monospace;
+      width: 22px; height: 20px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      margin-left: 4px;
+    }
+    .tb-btn:hover { border-color: var(--cursor); color: var(--cursor); }
+    .tb-btn.close:hover { border-color: var(--red); color: var(--red); }
 
-    .step-label {
-      font-size: 10px; color: var(--nes-dark);
-      text-transform: uppercase; letter-spacing: 0.05em;
-      margin-left: 10px;
+    /* ── Content area ── */
+    #content { flex: 1; overflow: hidden; position: relative; }
+
+    /* ── Steps ── */
+    .step {
+      position: absolute; inset: 0;
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 24px 40px;
+    }
+    .step.active { display: flex; animation: nesIn 0.08s steps(2) forwards; }
+
+    @keyframes nesIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .step-title {
+      font: bold 13px 'Courier New', monospace;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--cursor); margin-bottom: 6px;
+      align-self: flex-start;
+    }
+    .step-sub {
+      font-size: 10px; color: var(--gray);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 16px; align-self: flex-start;
+    }
+    .rule { width: 100%; height: 1px; background: var(--dim); margin: 12px 0; }
+
+    /* ════════ STEP 0 — WELCOME ════════ */
+    #s0 { gap: 0; }
+
+    .sprite-wrap {
+      width: 88px; height: 88px;
+      border: 2px solid var(--border);
+      box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--border);
+      margin-bottom: 16px; overflow: hidden;
+      image-rendering: pixelated; flex-shrink: 0;
+    }
+    .sprite-wrap img { width: 100%; height: 100%; image-rendering: pixelated; }
+
+    .welcome-brand {
+      font: bold 22px 'Courier New', monospace;
+      color: var(--cursor); letter-spacing: 0.18em;
+      text-transform: uppercase; margin-bottom: 2px;
+    }
+    .welcome-ver {
+      font-size: 9px; color: var(--dark);
+      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px;
     }
 
-    .nav-row { display: flex; align-items: center; gap: 0; }
-
-    .nes-btn {
-      border: 2px solid var(--nes-border); background: var(--nes-panel2);
-      color: var(--nes-text); font-family: 'Courier New', monospace;
-      font-size: 11px; font-weight: bold; text-transform: uppercase;
-      letter-spacing: 0.06em; padding: 5px 14px; cursor: pointer;
-      transition: background 0.05s;
+    .feature-list { width: 100%; margin-bottom: 18px; }
+    .feature-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0; font-size: 11px; color: var(--gray);
+      border-bottom: 1px solid #0D0D3A; letter-spacing: 0.04em;
     }
-    .nes-btn:hover:not(:disabled) { background: var(--nes-dim); }
-    .nes-btn:active:not(:disabled) { background: var(--nes-border); color: var(--nes-panel); }
-    .nes-btn:disabled { opacity: 0.32; cursor: default; border-color: var(--nes-dim); }
+    .feature-row:last-child { border-bottom: none; }
+    .f-icon { color: var(--cyan); font-size: 9px; flex-shrink: 0; }
 
-    .nes-btn-primary {
-      background: var(--nes-cursor); color: var(--nes-bg);
-      border-color: var(--nes-cursor);
+    .press-a {
+      font: bold 11px 'Courier New', monospace;
+      color: var(--cursor); letter-spacing: 0.12em;
+      text-transform: uppercase; margin-top: 6px;
     }
-    .nes-btn-primary:hover:not(:disabled) { background: #FFD860; border-color: #FFD860; }
-    .nes-btn-primary:active:not(:disabled) { background: var(--nes-border); color: var(--nes-panel); }
+    .blink { animation: blink 1s step-end infinite; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 
-    .btn-key {
-      font-size: 9px; color: var(--nes-dark);
+    /* ════════ STEP 1 — SYSTEM CHECK ════════ */
+    #s1 { justify-content: flex-start; }
+
+    .check-list {
+      width: 100%; display: flex; flex-direction: column; gap: 3px;
+      margin-bottom: 10px;
+    }
+    .check-row {
+      display: flex; align-items: center; padding: 9px 12px;
+      background: var(--panel); border: 1px solid var(--dim);
+    }
+    .check-row.ok   { border-color: #1C3A1C; }
+    .check-row.fail { border-color: #3A1C1C; }
+
+    .check-icon {
+      width: 8px; height: 8px; flex-shrink: 0;
+      background: var(--dim); margin-right: 10px;
+    }
+    .check-row.ok   .check-icon { background: var(--green); }
+    .check-row.fail .check-icon { background: var(--red); }
+    .check-row.checking .check-icon { animation: chkpulse 0.7s step-end infinite; }
+    @keyframes chkpulse { 0%,100% { background: var(--cursor); } 50% { background: var(--dim); } }
+
+    .check-label {
+      flex: 1; font: bold 10px 'Courier New', monospace;
+      text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray);
+    }
+    .check-row.ok .check-label { color: var(--text); }
+
+    .check-detail {
+      font-size: 9px; color: var(--dark); text-transform: uppercase;
+      letter-spacing: 0.04em; max-width: 155px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      margin-right: 10px;
+    }
+    .check-row.ok .check-detail { color: var(--dim); }
+
+    .check-badge {
+      font: bold 10px 'Courier New', monospace;
+      min-width: 70px; text-align: right; letter-spacing: 0.04em;
+    }
+    .check-badge.ok       { color: var(--green); }
+    .check-badge.fail     { color: var(--red); }
+    .check-badge.checking { color: var(--dim); }
+
+    #check-status {
+      font-size: 10px; color: var(--gray); text-transform: uppercase;
+      letter-spacing: 0.06em; align-self: flex-start;
+      margin-bottom: 10px; min-height: 14px;
+    }
+
+    .install-area { width: 100%; }
+    .install-progress {
+      font-size: 10px; color: var(--orange); text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 6px; min-height: 14px;
+    }
+    .install-btn {
+      width: 100%; padding: 9px 14px;
+      background: var(--panel2); border: 2px solid var(--orange);
+      color: var(--orange); font: bold 10px 'Courier New', monospace;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      cursor: pointer; text-align: left;
+    }
+    .install-btn:hover:not(:disabled) { background: #1A0C04; }
+    .install-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ════════ STEP 2 — GAME SELECT ════════ */
+    #s2 { justify-content: flex-start; }
+
+    .game-list { width: 100%; display: flex; flex-direction: column; gap: 3px; }
+    .game-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 12px; background: var(--panel); border: 1px solid var(--dim);
+      cursor: pointer;
+    }
+    .game-row:hover:not(.off) { border-color: var(--gray); }
+    .game-row.sel { border-color: var(--cursor); background: #0C0C44; }
+    .game-row.off { opacity: 0.38; cursor: not-allowed; }
+    .game-cur  { color: var(--cursor); width: 14px; font-size: 11px; flex-shrink: 0; }
+    .game-name { flex: 1; font: bold 11px 'Courier New', monospace; text-transform: uppercase; letter-spacing: 0.1em; }
+    .game-row.sel .game-name { color: var(--cursor); }
+    .game-badge { font: bold 9px 'Courier New', monospace; letter-spacing: 0.04em; }
+    .game-badge.ready { color: var(--green); }
+    .game-badge.soon  { color: var(--dim); }
+
+    .list-hint {
+      font-size: 9px; color: var(--dark); text-transform: uppercase;
+      letter-spacing: 0.06em; align-self: flex-start; margin-top: 10px;
+    }
+
+    /* ════════ STEP 3 — DISPLAY SETUP ════════ */
+    #s3 { justify-content: flex-start; }
+
+    .res-list { width: 100%; display: flex; flex-direction: column; gap: 3px; }
+    .res-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 12px; background: var(--panel); border: 1px solid var(--dim);
+      cursor: pointer;
+    }
+    .res-row:hover { border-color: var(--gray); }
+    .res-row.sel { border-color: var(--cursor); background: #0C0C44; }
+    .res-cur   { color: var(--cursor); width: 14px; font-size: 11px; flex-shrink: 0; }
+    .res-label { font: bold 11px 'Courier New', monospace; letter-spacing: 0.06em; flex: 1; }
+    .res-row.sel .res-label { color: var(--cursor); }
+    .res-tag   { font-size: 9px; color: var(--gray); }
+    .res-badge { font: bold 9px 'Courier New', monospace; color: var(--green); min-width: 64px; text-align: right; }
+
+    .res-warning {
+      display: none; width: 100%; margin-top: 10px; padding: 8px 12px;
+      background: #1C100A; border: 1px solid var(--orange);
+      font-size: 9px; color: var(--orange); text-transform: uppercase;
+      letter-spacing: 0.04em; line-height: 1.6;
+    }
+    .res-warning.show { display: block; }
+
+    /* ════════ STEP 4 — ALL SYSTEMS GO ════════ */
+    #s4 { gap: 0; }
+
+    .ready-hero {
+      display: flex; flex-direction: column;
+      align-items: center; margin-bottom: 4px; width: 100%;
+    }
+    .ready-blocks { display: flex; gap: 5px; margin-bottom: 10px; }
+    .ready-block  { width: 18px; height: 18px; background: var(--green); }
+    .ready-title  {
+      font: bold 15px 'Courier New', monospace;
+      color: var(--green); text-transform: uppercase; letter-spacing: 0.14em;
+    }
+
+    .tips-section { width: 100%; }
+    .tips-label {
+      font: bold 10px 'Courier New', monospace;
+      color: var(--cursor); text-transform: uppercase;
+      letter-spacing: 0.1em; margin-bottom: 6px;
+    }
+    .tip-row {
+      display: flex; align-items: center;
+      padding: 7px 12px; background: var(--panel); margin-bottom: 2px;
+    }
+    .tip-key {
+      font: bold 10px 'Courier New', monospace;
+      color: var(--cyan); min-width: 170px; letter-spacing: 0.04em;
+    }
+    .tip-val {
+      font-size: 10px; color: var(--gray);
       text-transform: uppercase; letter-spacing: 0.04em;
-      margin-right: 4px;
     }
+
+    .ready-note {
+      font-size: 10px; color: var(--gray); text-transform: uppercase;
+      letter-spacing: 0.05em; text-align: center; line-height: 1.7; width: 100%;
+    }
+
+    /* ── Footer ── */
+    #footer {
+      height: 44px; background: var(--panel);
+      border-top: 2px solid var(--border);
+      display: flex; align-items: center; padding: 0 14px; gap: 10px;
+      flex-shrink: 0;
+    }
+    .seg-bar { display: flex; gap: 4px; }
+    .seg    { width: 28px; height: 5px; background: var(--dim); }
+    .seg.on { background: var(--cursor); }
+
+    #step-label {
+      font-size: 9px; color: var(--dark); text-transform: uppercase;
+      letter-spacing: 0.08em; margin-right: auto;
+    }
+
+    .foot-btn {
+      background: var(--panel2); border: 2px solid var(--border); color: var(--text);
+      font: bold 10px 'Courier New', monospace; text-transform: uppercase;
+      letter-spacing: 0.1em; padding: 5px 13px; cursor: pointer;
+    }
+    .foot-btn:hover:not(:disabled) { border-color: var(--cursor); color: var(--cursor); }
+    .foot-btn.primary { border-color: var(--cursor); color: var(--cursor); }
+    .foot-btn.primary:hover:not(:disabled) { background: #14144A; }
+    .foot-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    #btn-back { display: none; }
   </style>
 </head>
 <body>
 
-<div id="titlebar">
-  <div class="tb-title">
-    <span class="tb-caret">&#9658;</span>
-    GAMEPARTNER SETUP
+  <!-- Title bar -->
+  <div id="titlebar">
+    <div class="tb-dot"></div>
+    <div class="tb-title">GamePartner &mdash; Setup</div>
+    <button class="tb-btn"       id="btn-min">_</button>
+    <button class="tb-btn close" id="btn-close">&#x2715;</button>
   </div>
-  <div class="win-btns">
-    <button class="win-btn" id="btn-min" title="Minimize">_</button>
-    <button class="win-btn" id="btn-close" title="Close">X</button>
-  </div>
-</div>
 
-<div id="app">
-  <div id="viewport">
+  <!-- Steps -->
+  <div id="content">
 
-    <!-- ───── STEP 0: WELCOME ───── -->
-    <div class="step active" id="s0">
-      <div class="welcome-body">
-        <div class="sprite-box"></div>
-        <div class="welcome-title">GamePartner</div>
-        <div class="welcome-ver">v0.1.0 &nbsp;&#9632;&nbsp; LOCAL BUILD</div>
-
-        <div class="feat-grid">
-          <div class="feat-row">AI coaching for competitive FPS games</div>
-          <div class="feat-row">Screen OCR at 2 FPS &mdash; no game memory access</div>
-          <div class="feat-row">Minimal always-on-top overlay</div>
-          <div class="feat-row">100% local &mdash; no cloud, no account</div>
+    <!-- STEP 0: Welcome -->
+    <div id="s0" class="step active">
+      <div class="sprite-wrap">
+        <img src="../../assets/sprite.png" alt="GamePartner" />
+      </div>
+      <div class="welcome-brand">GamePartner</div>
+      <div class="welcome-ver">v0.1.0 &nbsp;&bull;&nbsp; Windows</div>
+      <div class="rule"></div>
+      <div class="feature-list">
+        <div class="feature-row">
+          <span class="f-icon">&#x25BA;</span>
+          Watches your screen at 2 FPS &mdash; no game memory reading
         </div>
+        <div class="feature-row">
+          <span class="f-icon">&#x25BA;</span>
+          Reads health, credits &amp; game phase in real time
+        </div>
+        <div class="feature-row">
+          <span class="f-icon">&#x25BA;</span>
+          Surfaces tactical tips via a minimal always-on-top overlay
+        </div>
+        <div class="feature-row">
+          <span class="f-icon">&#x25BA;</span>
+          100% offline &mdash; nothing ever leaves your PC
+        </div>
+      </div>
+      <div class="press-a blink" id="a-key">&#x25BA; Press [A] to begin</div>
+    </div>
 
-        <div class="press-start">&#9658; PRESS [A] TO BEGIN &#9668;</div>
+    <!-- STEP 1: System Check -->
+    <div id="s1" class="step">
+      <div class="step-title">System Check</div>
+      <div class="step-sub" id="check-sub">Scanning environment&hellip;</div>
+      <div class="check-list" id="check-list"></div>
+      <div id="check-status"></div>
+
+      <div class="install-area" id="tess-area" style="display:none">
+        <div class="install-progress" id="tess-progress"></div>
+        <button class="install-btn" id="btn-install-tess">
+          &#x25BA; Install Tesseract OCR (Automatic &mdash; ~23 MB)
+        </button>
+      </div>
+
+      <div class="install-area" id="pip-area" style="display:none">
+        <div class="install-progress" id="pip-progress"></div>
+        <button class="install-btn" id="btn-install-pips">
+          &#x25BA; Install missing Python packages
+        </button>
       </div>
     </div>
 
-    <!-- ───── STEP 1: SYSTEM CHECK ───── -->
-    <div class="step" id="s1">
-      <div class="step-h">System Requirements</div>
-      <div class="step-sub" id="check-sub">Scanning environment&hellip;</div>
-      <div class="dep-list" id="dep-list"></div>
-      <button id="btn-install" style="display:none">
-        <span id="install-label">Install missing packages via pip</span>
-      </button>
-    </div>
-
-    <!-- ───── STEP 2: GAME SELECT ───── -->
-    <div class="step" id="s2">
-      <div class="step-h">Select Game Profile</div>
-      <div class="step-sub">Load the matching detection rules</div>
+    <!-- STEP 2: Game Select -->
+    <div id="s2" class="step">
+      <div class="step-title">Select Game</div>
+      <div class="step-sub">Choose your game profile to activate:</div>
       <div class="game-list">
         <div class="game-row sel" data-game="valorant">
-          <span class="g-arrow">&#9658;</span>
-          <span class="g-name">Valorant</span>
-          <span class="g-tag active">ACTIVE</span>
-        </div>
-        <div class="game-row off" data-game="cs2">
-          <span class="g-arrow">&#9658;</span>
-          <span class="g-name">CS2</span>
-          <span class="g-tag soon">SOON</span>
+          <span class="game-cur">&#x25BA;</span>
+          <span class="game-name">Valorant</span>
+          <span class="game-badge ready">[ READY ]</span>
         </div>
         <div class="game-row off" data-game="apex">
-          <span class="g-arrow">&#9658;</span>
-          <span class="g-name">Apex Legends</span>
-          <span class="g-tag soon">SOON</span>
+          <span class="game-cur">&nbsp;</span>
+          <span class="game-name">Apex Legends</span>
+          <span class="game-badge soon">[ COMING SOON ]</span>
         </div>
-        <div class="game-row off" data-game="ow2">
-          <span class="g-arrow">&#9658;</span>
-          <span class="g-name">Overwatch 2</span>
-          <span class="g-tag soon">SOON</span>
+        <div class="game-row off" data-game="cs2">
+          <span class="game-cur">&nbsp;</span>
+          <span class="game-name">Counter-Strike 2</span>
+          <span class="game-badge soon">[ COMING SOON ]</span>
+        </div>
+        <div class="game-row off" data-game="more">
+          <span class="game-cur">&nbsp;</span>
+          <span class="game-name">More games&hellip;</span>
+          <span class="game-badge soon">[ COMING SOON ]</span>
         </div>
       </div>
-      <div class="select-hint">&#9650;&#9660; use arrow keys or click to select</div>
+      <div class="list-hint">Arrow keys or click &nbsp;&bull;&nbsp; Only available games can be selected</div>
     </div>
 
-    <!-- ───── STEP 3: DONE ───── -->
-    <div class="step" id="s3">
-      <div class="done-body">
-        <div class="done-box">
-          <div class="done-ok">&#10003; SETUP COMPLETE</div>
+    <!-- STEP 3: Display Setup -->
+    <div id="s3" class="step">
+      <div class="step-title">Display Setup</div>
+      <div class="step-sub">Select the resolution you play at:</div>
+      <div class="res-list" id="res-list">
+        <div class="res-row sel" data-res="1920x1080">
+          <span class="res-cur">&#x25BA;</span>
+          <span class="res-label">1920 &times; 1080</span>
+          <span class="res-tag">Full HD</span>
+          <span class="res-badge">[ OPTIMAL ]</span>
         </div>
-        <div class="done-title">You're ready to play</div>
-        <ul class="done-hints">
-          <li>Overlay appears top-right &mdash; drag to reposition</li>
-          <li>Right-click tray icon to hide, restart, or quit</li>
-          <li>Tesseract OCR must be installed for full detection</li>
-        </ul>
-        <div class="press-launch">&#9658; PRESS [A] TO LAUNCH &#9668;</div>
+        <div class="res-row" data-res="2560x1440">
+          <span class="res-cur">&nbsp;</span>
+          <span class="res-label">2560 &times; 1440</span>
+          <span class="res-tag">2K / QHD</span>
+          <span class="res-badge"></span>
+        </div>
+        <div class="res-row" data-res="3840x2160">
+          <span class="res-cur">&nbsp;</span>
+          <span class="res-label">3840 &times; 2160</span>
+          <span class="res-tag">4K UHD</span>
+          <span class="res-badge"></span>
+        </div>
+      </div>
+      <div class="res-warning" id="res-warning">
+        &#x26A0; Default ROIs are calibrated for 1920x1080.<br>
+        At other resolutions accuracy may be lower until you recalibrate.<br>
+        Use the tray icon to recalibrate after launch.
       </div>
     </div>
 
-  </div><!-- /viewport -->
-
-  <div id="footer">
-    <div style="display:flex;align-items:center;">
-      <div class="seg-bar" id="seg-bar">
-        <div class="seg on"></div>
-        <div class="seg"></div>
-        <div class="seg"></div>
-        <div class="seg"></div>
+    <!-- STEP 4: All Systems Go -->
+    <div id="s4" class="step">
+      <div class="ready-hero">
+        <div class="ready-blocks">
+          <div class="ready-block"></div>
+          <div class="ready-block"></div>
+          <div class="ready-block"></div>
+        </div>
+        <div class="ready-title">All Systems Ready</div>
       </div>
-      <span class="step-label" id="step-label">STEP 1 OF 4</span>
+      <div class="rule"></div>
+      <div class="tips-section">
+        <div class="tips-label">Overlay Controls</div>
+        <div class="tip-row">
+          <span class="tip-key">Ctrl + Shift + G</span>
+          <span class="tip-val">Show / hide the overlay</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-key">Click &amp; drag overlay</span>
+          <span class="tip-val">Reposition anywhere on screen</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-key">Right-click tray icon</span>
+          <span class="tip-val">Settings, services &amp; quit</span>
+        </div>
+      </div>
+      <div class="rule"></div>
+      <div class="ready-note">
+        Launch your game first, then GamePartner activates automatically.<br>
+        The overlay appears in the top-right corner of your display.
+      </div>
     </div>
-    <div class="nav-row" id="nav-row">
-      <span class="btn-key">[B]</span>
-      <button class="nes-btn" id="btn-back" style="display:none">BACK</button>
-      <span class="btn-key" id="a-key" style="margin-left:10px">[A]</span>
-      <button class="nes-btn nes-btn-primary" id="btn-next">START</button>
-    </div>
+
   </div>
-</div>
 
-<script src="renderer.js"></script>
+  <!-- Footer -->
+  <div id="footer">
+    <div class="seg-bar" id="seg-bar">
+      <div class="seg on"></div>
+      <div class="seg"></div>
+      <div class="seg"></div>
+      <div class="seg"></div>
+      <div class="seg"></div>
+    </div>
+    <span id="step-label">STEP 1 OF 5</span>
+    <button class="foot-btn"         id="btn-back">[B] Back</button>
+    <button class="foot-btn primary" id="btn-next">[A] Start</button>
+  </div>
+
+  <script src="renderer.js"></script>
 </body>
 </html>

@@ -14,9 +14,10 @@ env/
 venv/
 .venv/
 *.egg-info/
-dist/
-build/
 .eggs/
+# PyInstaller output only (not the spec source files in build/)
+dist/vision_server/
+build/*.egg-info/
 
 # ── Electron build output ─────────────────────────────────────────────────────
 dist/
