@@ -457,6 +457,21 @@ class EventNormalizer {
       }, this.sessionId));
     }
 
+    if (confirmedPhase === 'end_win' || confirmedPhase === 'end_loss') {
+      // Round ended — emit round.end with outcome and last known round number
+      const roundNum = this._getRoundNumber(roundReading);
+      if (roundNum !== null) this._state.roundNumber = roundNum;
+
+      events.push(createEvent(EVENT_TYPES.ROUND_END, this.game, {
+        roundNumber: this._state.roundNumber,
+        winner:     confirmedPhase === 'end_win' ? 'self' : 'enemy',
+        reason:     confirmedPhase,
+        prevPhase,
+        confidence: phaseReading.confidence,
+        source:     'phase',
+      }, this.sessionId));
+    }
+
     return events;
   }
 
@@ -494,7 +509,7 @@ class EventNormalizer {
           this.sessionId
         ));
       } else {
-        // Falling edge — ability was used (or recharing)
+        // Falling edge — ability was used (or recharging)
         events.push(createEvent(EVENT_TYPES.ABILITY_USED, this.game, {
           slot,
           confidence: reading.confidence,
@@ -519,6 +534,7 @@ class EventNormalizer {
     const state = reading.value.toLowerCase();
     if (state === this._state.spikeState) return [];
 
+    const prevState = this._state.spikeState;
     this._state.spikeState = state;
 
     const typeMap = {
@@ -531,7 +547,7 @@ class EventNormalizer {
     if (!type) return [];
 
     return [createEvent(type, this.game, {
-      prevState:  this._state.spikeState,
+      prevState,
       confidence: reading.confidence,
       source:     'spike_state',
     }, this.sessionId)];

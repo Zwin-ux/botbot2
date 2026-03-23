@@ -194,7 +194,7 @@ def _read_phase(frame: np.ndarray, cfg: dict) -> Optional[str]:
     # Keyword matching — order matters (most specific first)
     if any(kw in text for kw in ("BUY", "BUYING", "PURCHASE")):
         return "buy"
-    if any(kw in text for kw in ("WIN", "WIN", "VICTORY")):
+    if any(kw in text for kw in ("WIN", "VICTORY")):
         return "end_win"
     if any(kw in text for kw in ("LOSE", "DEFEAT", "LOST")):
         return "end_loss"
