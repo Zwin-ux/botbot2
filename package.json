@@ -15,10 +15,11 @@
     "test:all":    "node tests/test_normalizer.js && python tests/test_vision_pipeline.py"
   },
   "dependencies": {
-    "better-sqlite3": "^9.4.3",
-    "electron-log":   "^5.1.2",
-    "express":        "^4.18.3",
-    "ws":             "^8.16.0"
+    "better-sqlite3":  "^9.4.3",
+    "electron-log":    "^5.1.2",
+    "electron-updater": "^6.1.8",
+    "express":         "^4.18.3",
+    "ws":              "^8.16.0"
   },
   "devDependencies": {
     "electron":         "^29.1.1",
@@ -52,6 +53,11 @@
         "filter": ["**/*"]
       }
     ],
+    "publish": {
+      "provider": "github",
+      "owner":    "Zwin-ux",
+      "repo":     "botbot2"
+    },
     "directories": {
       "output": "dist/installer"
     }

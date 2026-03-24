@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>GP — Session Stats</title>
+  <style>
+    :root {
+      --bg:     #060830;
+      --panel:  #10105C;
+      --panel2: #1A1A80;
+      --border: #F8F8F8;
+      --dim:    #38387C;
+      --text:   #F8F8F8;
+      --gray:   #9898C8;
+      --dark:   #404068;
+      --cursor: #F8C038;
+      --green:  #38C840;
+      --red:    #E83030;
+      --orange: #FC7848;
+      --cyan:   #3CBCFC;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-font-smoothing: none; font-smooth: never;
+    }
+
+    body {
+      background: var(--bg);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px; color: var(--text);
+      user-select: none;
+      display: flex; flex-direction: column;
+      height: 100vh; overflow: hidden;
+    }
+
+    /* CRT scanlines */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg, transparent 0px, transparent 1px,
+        rgba(0,0,0,0.06) 1px, rgba(0,0,0,0.06) 2px
+      );
+    }
+
+    /* ── Title bar ── */
+    #titlebar {
+      height: 30px;
+      background: var(--panel2);
+      border-bottom: 2px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 10px;
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+    .tb-dot { width: 7px; height: 7px; background: var(--cyan); margin-right: 8px; }
+    .tb-title {
+      font: bold 10px 'Courier New', monospace;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--cursor); flex: 1;
+    }
+    .tb-btn {
+      -webkit-app-region: no-drag;
+      background: none; border: 1px solid var(--dim);
+      color: var(--gray); font: bold 10px 'Courier New', monospace;
+      width: 22px; height: 20px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      margin-left: 4px;
+    }
+    .tb-btn:hover { border-color: var(--cursor); color: var(--cursor); }
+    .tb-btn.close:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── Content ── */
+    #content {
+      flex: 1; padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 8px;
+      overflow-y: auto;
+    }
+
+    .section-title {
+      font: bold 10px 'Courier New', monospace;
+      color: var(--cursor); text-transform: uppercase;
+      letter-spacing: 0.1em; margin-bottom: 4px;
+    }
+
+    /* ── Stat rows ── */
+    .stat-row {
+      display: flex; align-items: center;
+      padding: 7px 10px;
+      background: var(--panel);
+      border: 1px solid var(--dim);
+    }
+    .stat-label {
+      flex: 1;
+      font: bold 10px 'Courier New', monospace;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--gray);
+    }
+    .stat-value {
+      font: bold 12px 'Courier New', monospace;
+      color: var(--text); min-width: 60px; text-align: right;
+    }
+    .stat-value.green  { color: var(--green); }
+    .stat-value.red    { color: var(--red); }
+    .stat-value.gold   { color: var(--cursor); }
+    .stat-value.cyan   { color: var(--cyan); }
+
+    /* ── Bar chart ── */
+    .bar-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 10px;
+      background: var(--panel);
+      border: 1px solid var(--dim);
+    }
+    .bar-label {
+      font: bold 9px 'Courier New', monospace;
+      color: var(--dark); text-transform: uppercase;
+      min-width: 60px;
+    }
+    .bar-track {
+      flex: 1; height: 8px;
+      background: var(--bg);
+      display: flex; gap: 1px;
+    }
+    .bar-fill {
+      height: 100%;
+      transition: width 0.1s steps(4);
+    }
+    .bar-fill.green  { background: var(--green); }
+    .bar-fill.red    { background: var(--red); }
+    .bar-fill.gold   { background: var(--cursor); }
+    .bar-num {
+      font: bold 9px 'Courier New', monospace;
+      color: var(--gray); min-width: 30px; text-align: right;
+    }
+
+    /* ── Recent events ── */
+    .event-row {
+      display: flex; align-items: center;
+      padding: 4px 10px;
+      background: var(--panel);
+      border-left: 3px solid var(--dim);
+      font-size: 9px; color: var(--gray);
+      text-transform: uppercase; letter-spacing: 0.02em;
+    }
+    .event-row .ev-type {
+      color: var(--cyan); min-width: 110px; font-weight: bold;
+    }
+    .event-row .ev-time {
+      color: var(--dark); margin-left: auto;
+    }
+
+    .event-row.health  { border-left-color: var(--green); }
+    .event-row.economy { border-left-color: var(--cursor); }
+    .event-row.round   { border-left-color: var(--orange); }
+    .event-row.decision { border-left-color: var(--cyan); }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center; padding: 30px 0;
+      color: var(--dark); font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+
+    /* ── Footer ── */
+    #footer {
+      height: 28px;
+      background: var(--panel);
+      border-top: 2px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 12px;
+      font-size: 8px; color: var(--dark);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      flex-shrink: 0;
+    }
+    #footer span { flex: 1; }
+  </style>
+</head>
+<body>
+
+  <div id="titlebar">
+    <div class="tb-dot"></div>
+    <div class="tb-title">Session Stats</div>
+    <button class="tb-btn" id="btn-min">_</button>
+    <button class="tb-btn close" id="btn-close">&#x2715;</button>
+  </div>
+
+  <div id="content">
+    <div class="empty" id="loading">Loading stats...</div>
+  </div>
+
+  <div id="footer">
+    <span id="footer-text">GamePartner</span>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

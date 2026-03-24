@@ -81,6 +81,12 @@ _last_result  : dict = {}
 _frames_total : int  = 0
 _agent_ok     : bool = False   # tracks whether last agent POST succeeded
 
+# ── Recording state ──────────────────────────────────────────────────────────
+_recording      : bool = False
+_record_dir     : str  = ''
+_record_frames  : int  = 0
+_record_max     : int  = 120    # default: 60s at 2 FPS
+
 
 # ── Agent retry logic ─────────────────────────────────────────────────────────
 
@@ -158,6 +164,7 @@ def capture_loop(cap: ScreenCapture, detector: FrameDetector, client: AgentClien
     the next frame starts immediately (no stacking delay).
     """
     global _frames_total, _last_result, _agent_ok, SESSION_ID
+    global _recording, _record_frames
 
     log.info(f"[vision] Capture loop started — game={ACTIVE_GAME}, {TARGET_FPS:.1f} FPS")
 
@@ -179,6 +186,10 @@ def capture_loop(cap: ScreenCapture, detector: FrameDetector, client: AgentClien
                 # Post to agent
                 ok = client.post(ACTIVE_GAME, SESSION_ID, flat)
                 _agent_ok = ok
+
+                # Save frame to disk if recording
+                if _recording and _record_dir:
+                    _save_recording_frame(frame, meta)
 
         except Exception as e:
             log.error(f"[vision] Capture loop error: {e}", exc_info=True)
@@ -224,6 +235,14 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/session":
             self._json({"sessionId": SESSION_ID, "game": ACTIVE_GAME})
 
+        elif self.path == "/record/status":
+            self._json({
+                "recording": _recording,
+                "frames":    _record_frames,
+                "max":       _record_max,
+                "dir":       _record_dir,
+            })
+
         else:
             self._json({"error": "not found"}, 404)
 
@@ -233,8 +252,69 @@ class Handler(BaseHTTPRequestHandler):
             SESSION_ID = str(uuid.uuid4())
             log.info(f"[vision] Session reset → {SESSION_ID}")
             self._json({"sessionId": SESSION_ID})
+
+        elif self.path == "/record/start":
+            result = _start_recording()
+            self._json(result)
+
+        elif self.path == "/record/stop":
+            result = _stop_recording()
+            self._json(result)
+
         else:
             self._json({"error": "not found"}, 404)
+
+
+# ── Recording helpers ────────────────────────────────────────────────────────
+
+def _start_recording(duration_s: int = 60) -> dict:
+    global _recording, _record_dir, _record_frames, _record_max
+
+    if _recording:
+        return {"ok": False, "error": "already recording", "dir": _record_dir}
+
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    _record_dir = os.path.join(
+        os.path.dirname(_THIS_DIR),  # src/services
+        '..', '..', 'recordings', f'{ACTIVE_GAME}-{timestamp}'
+    )
+    _record_dir = os.path.abspath(_record_dir)
+    os.makedirs(_record_dir, exist_ok=True)
+
+    _record_frames = 0
+    _record_max = int(duration_s * TARGET_FPS)
+    _recording = True
+
+    log.info(f"[vision] Recording started → {_record_dir} (max {_record_max} frames)")
+    return {"ok": True, "dir": _record_dir, "max": _record_max}
+
+
+def _stop_recording() -> dict:
+    global _recording
+    if not _recording:
+        return {"ok": True, "frames": 0}
+
+    _recording = False
+    log.info(f"[vision] Recording stopped — {_record_frames} frames saved to {_record_dir}")
+    return {"ok": True, "frames": _record_frames, "dir": _record_dir}
+
+
+def _save_recording_frame(frame, meta: dict):
+    global _record_frames, _recording
+
+    try:
+        import cv2 as _cv2
+        fname = f"frame_{_record_frames:04d}.png"
+        fpath = os.path.join(_record_dir, fname)
+        _cv2.imwrite(fpath, frame)
+        _record_frames += 1
+
+        if _record_frames >= _record_max:
+            _recording = False
+            log.info(f"[vision] Recording complete — {_record_frames} frames in {_record_dir}")
+    except Exception as e:
+        log.warning(f"[vision] Failed to save frame: {e}")
 
 
 # ── Test / replay mode ────────────────────────────────────────────────────────

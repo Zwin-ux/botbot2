@@ -16,6 +16,7 @@ const config             = require('../../config/default.json');
 const { Orchestrator }           = require('./orchestrator');
 const { createOverlayWindow }    = require('../overlay/window');
 const { createOnboardingWindow } = require('../onboarding/window');
+const { createStatsWindow }      = require('../stats/window');
 const { IPC, VALID_GAMES, VALID_RESOLUTIONS } = require('../shared/ipc-channels');
 
 // ── Tesseract installer (UB-Mannheim, tested release) ─────────────────────────
@@ -39,6 +40,7 @@ const isDev = process.argv.includes('--dev');
 let orchestrator     = null;
 let overlayWindow    = null;
 let onboardingWindow = null;
+let statsWindow      = null;
 let tray             = null;
 
 // ── Setup-complete flag ───────────────────────────────────────────────────────
@@ -57,6 +59,46 @@ function markSetupComplete() {
   }
 }
 
+// ── Auto-update (checks GitHub Releases on launch) ──────────────────────────
+
+function initAutoUpdate() {
+  try {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.logger = log;
+    autoUpdater.autoDownload = false;     // don't download until user confirms
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on('update-available', (info) => {
+      log.info(`[update] New version available: ${info.version}`);
+      // Surface to overlay as a low-priority NES alert
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.webContents.send('gameEvent', {
+          type: 'agent.decision',
+          payload: {
+            message: `Update v${info.version} available -- restart to install`,
+            priority: 'low',
+            ttl: 15000,
+          },
+        });
+      }
+      autoUpdater.downloadUpdate();
+    });
+
+    autoUpdater.on('update-downloaded', () => {
+      log.info('[update] Update downloaded — will install on quit');
+    });
+
+    autoUpdater.on('error', (err) => {
+      log.debug(`[update] Auto-update check failed: ${err.message}`);
+    });
+
+    // Check after a short delay so it doesn't slow down startup
+    setTimeout(() => autoUpdater.checkForUpdates(), 10_000);
+  } catch {
+    // electron-updater not installed (dev mode) — skip silently
+  }
+}
+
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
@@ -68,6 +110,7 @@ app.whenReady().then(async () => {
     createTray({ hasOverlay: false });
   } else {
     await launchApp();
+    initAutoUpdate();
   }
 });
 
@@ -283,6 +326,120 @@ function registerOverlayIPC(orch) {
   });
 }
 
+// ── IPC: stats window ────────────────────────────────────────────────────────
+
+function registerStatsIPC() {
+  if (ipcMain.eventNames().includes('stats:getData')) return;
+
+  ipcMain.handle('stats:getData', async () => {
+    const storagePort = config.services.storage.port;
+    try {
+      const http = require('http');
+      const fetch = (url) => new Promise((resolve, reject) => {
+        http.get(url, (res) => {
+          let body = '';
+          res.on('data', (c) => body += c);
+          res.on('end', () => {
+            try { resolve(JSON.parse(body)); } catch { resolve(null); }
+          });
+          res.on('error', reject);
+        }).on('error', reject);
+      });
+
+      const game = config.activeProfile;
+      const [events, stats] = await Promise.all([
+        fetch(`http://127.0.0.1:${storagePort}/events?limit=50`),
+        fetch(`http://127.0.0.1:${storagePort}/stats/${game}`),
+      ]);
+
+      if (!events || !Array.isArray(events)) {
+        return { totalEvents: 0, game };
+      }
+
+      // Compute breakdown by event type
+      const breakdown = {};
+      let earliest = Infinity;
+      let latest = 0;
+      let decisions = 0;
+      for (const ev of events) {
+        breakdown[ev.type] = (breakdown[ev.type] || 0) + 1;
+        if (ev.ts < earliest) earliest = ev.ts;
+        if (ev.ts > latest)   latest = ev.ts;
+        if (ev.type === 'agent.decision') decisions++;
+      }
+
+      return {
+        game,
+        totalEvents:     events.length,
+        decisions,
+        sessionDuration: latest > earliest ? latest - earliest : 0,
+        breakdown,
+        recentEvents:    events.slice(0, 8),
+        stats:           stats || {},
+      };
+    } catch (err) {
+      log.warn('[stats] Failed to fetch stats:', err.message);
+      return { totalEvents: 0, game: config.activeProfile };
+    }
+  });
+
+  ipcMain.handle('stats:close', () => {
+    if (statsWindow && !statsWindow.isDestroyed()) statsWindow.close();
+    statsWindow = null;
+  });
+
+  ipcMain.handle('stats:minimize', () => {
+    if (statsWindow && !statsWindow.isDestroyed()) statsWindow.minimize();
+  });
+}
+
+function openStatsWindow() {
+  if (statsWindow && !statsWindow.isDestroyed()) {
+    statsWindow.focus();
+    return;
+  }
+  registerStatsIPC();
+  statsWindow = createStatsWindow();
+  statsWindow.on('closed', () => { statsWindow = null; });
+}
+
+// ── Recording ───────────────────────────────────────────────────────────────
+
+async function startRecording() {
+  const visionPort = config.services.vision.port;
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const req = http.request(
+        { hostname: '127.0.0.1', port: visionPort, path: '/record/start', method: 'POST' },
+        (res) => {
+          let body = '';
+          res.on('data', (c) => body += c);
+          res.on('end', () => {
+            try { resolve(JSON.parse(body)); } catch { reject(new Error('bad json')); }
+          });
+        }
+      );
+      req.on('error', reject);
+      req.end();
+    });
+
+    if (result.ok) {
+      log.info(`[main] Recording started → ${result.dir}`);
+      // Notify overlay
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.webContents.send('gameEvent', {
+          type: 'agent.decision',
+          payload: { message: 'Recording 60s for calibration', priority: 'info', ttl: 4000 },
+        });
+      }
+    } else {
+      log.warn(`[main] Recording failed: ${result.error}`);
+    }
+  } catch (err) {
+    log.error(`[main] Could not start recording: ${err.message}`);
+  }
+}
+
 // ── Game switching ───────────────────────────────────────────────────────────
 
 async function switchGame(game) {
@@ -372,6 +529,8 @@ function createTray({ hasOverlay }) {
         ],
       },
       { type: 'separator' },
+      { label: 'Session Stats', click: () => openStatsWindow() },
+      { label: 'Record 60s', click: () => startRecording() },
       { label: 'View Logs', click: () => {
         const logPath = path.join(app.getPath('userData'), 'logs/main.log');
         shell.openPath(logPath);
