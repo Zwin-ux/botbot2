@@ -32,10 +32,12 @@ for (let i = 0; i < HP_SEGS; i++) {
 let connected = false;
 
 function showConnecting() {
+  // Read active game from config to show the correct name
+  const gameName = (window.gp.getGameName && window.gp.getGameName()) || 'YOUR GAME';
   const el = document.createElement('div');
   el.id        = 'connecting-msg';
   el.className = 'alert info';
-  el.innerHTML = '<span class="alert-pfx">   </span>START VALORANT TO ACTIVATE';
+  el.innerHTML = `<span class="alert-pfx">   </span>START ${esc(gameName).toUpperCase()} TO ACTIVATE`;
   feed.appendChild(el);
   // Blink until first event
   el._blink = setInterval(() => {
@@ -48,7 +50,36 @@ function clearConnecting() {
   if (el) { clearInterval(el._blink); el.remove(); }
 }
 
+function showError(message) {
+  clearConnecting();
+  const el = document.createElement('div');
+  el.id        = 'error-msg';
+  el.className = 'alert critical';
+  el.innerHTML = `<span class="alert-pfx">!!!</span>${esc(message).toUpperCase()}`;
+  feed.appendChild(el);
+}
+
+// ── Game-aware labels ─────────────────────────────────────────────────────────
+// Adjust header labels to match the active game.
+
+const activeGame = (window.gp.getGameName && window.gp.getGameName()) || '';
+if (activeGame === 'MINESWEEPER') {
+  const hpLabel = document.querySelector('.hp-label');
+  const credSym = document.querySelector('.cred-sym');
+  if (hpLabel) hpLabel.textContent = 'MINES';
+  if (credSym) credSym.textContent = '\u23F1';  // timer icon
+}
+
 showConnecting();
+
+// ── Service error handler ────────────────────────────────────────────────────
+// Surface critical service failures so consumers aren't left guessing.
+
+if (window.gp.onServiceError) {
+  window.gp.onServiceError((msg) => {
+    showError(msg);
+  });
+}
 
 // ── Game event handler ────────────────────────────────────────────────────────
 

@@ -100,6 +100,13 @@ async function launchApp() {
   overlayWindow = createOverlayWindow();
   createTray({ hasOverlay: true });
 
+  // Surface startup errors to the overlay after it loads
+  if (orchestrator._startupError) {
+    overlayWindow.webContents.on('did-finish-load', () => {
+      overlayWindow.webContents.send('serviceError', orchestrator._startupError);
+    });
+  }
+
   globalShortcut.register('CommandOrControl+Shift+G', () => {
     if (!overlayWindow) return;
     overlayWindow.isVisible() ? overlayWindow.hide() : overlayWindow.show();
@@ -251,6 +258,15 @@ function registerOverlayIPC(orch) {
   orch.on('gameEvent', (event) => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.webContents.send(IPC.GAME_EVENT, event);
+    }
+  });
+
+  // Surface service crashes to the overlay so consumers see what's wrong
+  orch.on('serviceExit', ({ name }) => {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.send('serviceError',
+        `${name} service crashed -- check logs or restart`
+      );
     }
   });
 }

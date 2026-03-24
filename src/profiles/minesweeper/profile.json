@@ -1,27 +1,37 @@
 {
   "name": "Minesweeper",
   "game": "minesweeper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "resolution": [1920, 1080],
   "maxDecisionsPerFrame": 1,
 
+  "_calibration_notes": [
+    "ROIs assume classic Minesweeper (Expert board) centered on a 1920x1080 screen.",
+    "Window approx 500x360px, centered at ~(710, 360).",
+    "If your Minesweeper window is in a different position, use:",
+    "  python tools/calibrate_rois.py --capture",
+    "to recalibrate the ROI pixel coordinates below.",
+    "Microsoft Store Minesweeper has a different layout — these ROIs target the",
+    "classic Win7-style Minesweeper or open-source clones (e.g. Mines, Gnome Mines)."
+  ],
+
   "hud": {
     "health": {
-      "roi": [30, 60, 90, 38],
+      "roi": [726, 376, 78, 32],
       "method": "ocr_number",
       "range": [0, 999],
-      "_label": "mines remaining (mapped to health field)"
+      "_label": "mines remaining counter (top-left of Minesweeper header bar)"
     },
     "credits": {
-      "roi": [340, 60, 90, 38],
+      "roi": [1118, 376, 78, 32],
       "method": "ocr_number",
       "range": [0, 999],
-      "_label": "timer seconds (mapped to credits field)"
+      "_label": "timer seconds (top-right of Minesweeper header bar)"
     },
     "phase": {
-      "roi": [195, 55, 50, 50],
+      "roi": [936, 372, 40, 40],
       "method": "face_state",
-      "_label": "game state face: playing / won / lost"
+      "_label": "game state face button (center of Minesweeper header bar)"
     }
   },
 
