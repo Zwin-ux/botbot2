@@ -11,6 +11,7 @@ const https              = require('https');
 const http               = require('http');
 const { spawnSync, spawn } = require('child_process');
 const log                = require('electron-log');
+const config             = require('../../config/default.json');
 
 const { Orchestrator }           = require('./orchestrator');
 const { createOverlayWindow }    = require('../overlay/window');
@@ -85,6 +86,7 @@ async function launchApp() {
     isDev,
     isPackaged:    app.isPackaged,
     resourcesPath: process.resourcesPath,
+    tesseractDir:  getSavedTesseractDir(),
   });
   registerOverlayIPC(orchestrator);
 
@@ -128,8 +130,17 @@ function registerOnboardingIPC() {
   });
 
   // ── Dependency checks ──────────────────────────────────────────────────────
-  ipcMain.handle(IPC.CHECK_DEPS,       () => checkDependencies());
-  ipcMain.handle(IPC.CHECK_TESSERACT,  () => checkTesseract());
+  ipcMain.handle(IPC.CHECK_DEPS,       () => {
+    const deps = checkDependencies();
+    // Persist Tesseract path if found during dependency check
+    if (deps.tesseract.ok && deps.tesseract.dir) saveTesseractPath(deps.tesseract.dir);
+    return deps;
+  });
+  ipcMain.handle(IPC.CHECK_TESSERACT,  () => {
+    const result = checkTesseract();
+    if (result.ok && result.dir) saveTesseractPath(result.dir);
+    return result;
+  });
 
   // ── Tesseract auto-install ─────────────────────────────────────────────────
   ipcMain.handle(IPC.INSTALL_TESSERACT, async (event) => {
@@ -157,6 +168,7 @@ function registerOnboardingIPC() {
 
       const after = checkTesseract();
       log.info(`[setup] Tesseract post-install check: ${JSON.stringify(after)}`);
+      if (after.ok && after.dir) saveTesseractPath(after.dir);
       return { ok: after.ok, version: after.version || 'installed' };
 
     } catch (err) {
@@ -336,6 +348,23 @@ function createTray({ hasOverlay }) {
         submenu: gameChoices,
       },
       {
+        label: 'Overlay',
+        submenu: [
+          { label: 'Click-Through', type: 'checkbox', checked: false,
+            click: (item) => {
+              if (overlayWindow) overlayWindow.setIgnoreMouseEvents(item.checked, { forward: true });
+            },
+          },
+          { type: 'separator' },
+          ...[100, 80, 60, 40].map(pct => ({
+            label: `Opacity ${pct}%`,
+            type: 'radio',
+            checked: pct === 100,
+            click: () => { if (overlayWindow) overlayWindow.setOpacity(pct / 100); },
+          })),
+        ],
+      },
+      {
         label: 'Services',
         submenu: [
           { label: 'Restart Agent',  click: () => orchestrator?.restartService('agent')  },
@@ -393,11 +422,37 @@ function checkTesseract() {
       const r = spawnSync(bin, ['--version'], { timeout: 3000, encoding: 'utf8', windowsHide: true });
       if (r.status === 0 || (r.stderr && r.stderr.includes('tesseract'))) {
         const ver = (r.stderr || r.stdout || '').split('\n')[0].replace('tesseract', '').trim();
-        return { ok: true, version: ver || 'installed' };
+        // Resolve the directory containing the binary for TESSDATA_PREFIX
+        const resolvedDir = bin === 'tesseract' ? null : path.dirname(bin);
+        return { ok: true, version: ver || 'installed', dir: resolvedDir };
       }
     } catch { /* try next */ }
   }
   return { ok: false };
+}
+
+function saveTesseractPath(tessDir) {
+  if (!tessDir) return;
+  try {
+    const cfgPath = path.join(app.getPath('userData'), 'user-config.json');
+    const cfg = fs.existsSync(cfgPath)
+      ? JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+      : {};
+    cfg.tesseractDir = tessDir;
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    log.info(`[setup] Tesseract path saved: ${tessDir}`);
+  } catch (err) {
+    log.warn('Could not save Tesseract path:', err.message);
+  }
+}
+
+function getSavedTesseractDir() {
+  try {
+    const cfgPath = path.join(app.getPath('userData'), 'user-config.json');
+    if (!fs.existsSync(cfgPath)) return null;
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    return cfg.tesseractDir || null;
+  } catch { return null; }
 }
 
 function checkPipPackages() {

@@ -1,38 +1,48 @@
 {
   "name": "Minesweeper",
   "game": "minesweeper",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "resolution": [1920, 1080],
   "maxDecisionsPerFrame": 1,
   "window": {
     "title": "Minesweeper",
-    "_note": "Vision service will auto-find this window and capture only its area. ROIs become relative to the window, not the full screen."
+    "_note": "Matches any window with 'Minesweeper' in the title. Covers classic Minesweeper, Minesweeper X, and most clones. The Microsoft Store 'Microsoft Minesweeper' app has a modern UI that won't work with LCD OCR — use a classic clone instead."
   },
 
   "_calibration_notes": [
     "Window targeting is enabled: vision captures only the Minesweeper window.",
-    "ROIs are RELATIVE to the window top-left corner, not the full screen.",
-    "Classic Minesweeper Expert board is approx 500x400px.",
-    "If detection fails, recalibrate with: python tools/calibrate_rois.py --capture"
+    "ROIs are RELATIVE to the window's top-left corner (0,0), not the full screen.",
+    "",
+    "Classic Minesweeper layout (Expert board, default window size ~500x380):",
+    "  - 8px border padding on left/right, ~3px on top (below title bar)",
+    "  - Header bar starts at y≈55 (below title bar + menu bar)",
+    "  - Mine counter: top-left of header, 3-digit red LCD, ~41x23px",
+    "  - Timer:        top-right of header, 3-digit red LCD, ~41x23px",
+    "  - Face button:  centered in header, ~26x26px",
+    "",
+    "These ROIs are calibrated for classic Minesweeper at default Expert size.",
+    "If detection fails, recalibrate with: python tools/calibrate_rois.py --capture",
+    "The detector uses red-channel thresholding for LCD digits — only works on",
+    "classic-style 7-segment displays (bright red on dark background)."
   ],
 
   "hud": {
     "health": {
-      "roi": [16, 16, 78, 32],
+      "roi": [17, 56, 41, 23],
       "method": "ocr_number",
       "range": [0, 999],
-      "_label": "mines remaining counter (top-left of window header bar)"
+      "_label": "mines remaining counter — 3-digit red LCD at top-left of header bar"
     },
     "credits": {
-      "roi": [408, 16, 78, 32],
+      "roi": [432, 56, 41, 23],
       "method": "ocr_number",
       "range": [0, 999],
-      "_label": "timer seconds (top-right of window header bar)"
+      "_label": "timer seconds — 3-digit red LCD at top-right of header bar (Expert board width ~490px, counter at right edge minus padding)"
     },
     "phase": {
-      "roi": [226, 16, 40, 40],
+      "roi": [229, 53, 26, 26],
       "method": "face_state",
-      "_label": "game state face button (center of window header bar)"
+      "_label": "game state face button — centered in header bar (~half of Expert board width minus half face width)"
     }
   },
 
@@ -87,14 +97,26 @@
     },
     {
       "id": "game_lost",
-      "trigger": "round.buy_phase",
-      "condition": { "payload.credits": { "$eq": -1 } },
+      "trigger": "round.end",
+      "condition": { "payload.winner": { "$eq": "enemy" } },
       "priority": "high",
       "cooldown": 5000,
       "confidence": { "minSignals": 1, "window": 2000 },
       "output": {
         "message": "Boom! Try again",
         "ttl": 6000
+      }
+    },
+    {
+      "id": "game_won",
+      "trigger": "round.end",
+      "condition": { "payload.winner": { "$eq": "self" } },
+      "priority": "high",
+      "cooldown": 5000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": {
+        "message": "You win! Nice sweep",
+        "ttl": 8000
       }
     }
   ]

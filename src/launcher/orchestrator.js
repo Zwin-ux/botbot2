@@ -100,11 +100,12 @@ class ServiceProcess extends EventEmitter {
 }
 
 class Orchestrator extends EventEmitter {
-  constructor({ isDev = false, isPackaged = false, resourcesPath = '' } = {}) {
+  constructor({ isDev = false, isPackaged = false, resourcesPath = '', tesseractDir = '' } = {}) {
     super();
     this.isDev         = isDev;
     this.isPackaged    = isPackaged;
     this.resourcesPath = resourcesPath;
+    this.tesseractDir  = tesseractDir || TESSERACT_DEFAULT_DIR;
     this.services = this._buildServiceMap();
   }
 
@@ -126,8 +127,8 @@ class Orchestrator extends EventEmitter {
         GP_CONFIG_PATH:    path.join(visionResDir, 'config', 'default.json'),
         GP_PROFILES_PATH:  path.join(visionResDir, 'profiles'),
         // Add Tesseract to PATH so pytesseract can find the binary
-        PATH:              `${TESSERACT_DEFAULT_DIR};${process.env.PATH || ''}`,
-        TESSDATA_PREFIX:   path.join(TESSERACT_DEFAULT_DIR, 'tessdata'),
+        PATH:              `${this.tesseractDir};${process.env.PATH || ''}`,
+        TESSDATA_PREFIX:   path.join(this.tesseractDir, 'tessdata'),
       };
     } else {
       visionCmd  = 'python';

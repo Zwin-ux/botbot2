@@ -98,6 +98,33 @@ Adding a new game requires only `profile.json` + `detector.py` in `src/profiles/
 
 ---
 
+## Troubleshooting
+
+**Overlay shows "START [GAME] TO ACTIVATE" but I'm playing**
+The game window title must contain the expected name (e.g. "Minesweeper").
+GamePartner auto-detects the window by title. Check: right-click tray icon > View Logs.
+
+**Everything shows dashes and no alerts appear**
+Tesseract OCR may not be installed or wasn't found. Right-click tray > View Logs and look
+for `[vision] Tesseract not available`. Fix: delete `%APPDATA%\GamePartner\setup-complete.json`
+and relaunch to re-run the setup wizard.
+
+**Detection seems wrong or inaccurate**
+Default ROIs are calibrated for 1920x1080. At other resolutions, accuracy may drop.
+Use `python tools/calibrate_rois.py --capture` to recalibrate for your resolution.
+
+**How do I switch games?**
+Right-click the tray icon > Switch Game > pick your game. Vision service restarts automatically.
+
+**Service crashed / overlay shows RETRY button**
+Click RETRY in the overlay, or right-click tray > Services > Restart Vision.
+If it keeps crashing, check tray > View Logs for the error.
+
+**How do I re-run the setup wizard?**
+Delete `%APPDATA%\GamePartner\setup-complete.json` and relaunch the app.
+
+---
+
 ## License
 
 MIT
