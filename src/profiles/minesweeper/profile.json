@@ -4,34 +4,35 @@
   "version": "1.1.0",
   "resolution": [1920, 1080],
   "maxDecisionsPerFrame": 1,
+  "window": {
+    "title": "Minesweeper",
+    "_note": "Vision service will auto-find this window and capture only its area. ROIs become relative to the window, not the full screen."
+  },
 
   "_calibration_notes": [
-    "ROIs assume classic Minesweeper (Expert board) centered on a 1920x1080 screen.",
-    "Window approx 500x360px, centered at ~(710, 360).",
-    "If your Minesweeper window is in a different position, use:",
-    "  python tools/calibrate_rois.py --capture",
-    "to recalibrate the ROI pixel coordinates below.",
-    "Microsoft Store Minesweeper has a different layout — these ROIs target the",
-    "classic Win7-style Minesweeper or open-source clones (e.g. Mines, Gnome Mines)."
+    "Window targeting is enabled: vision captures only the Minesweeper window.",
+    "ROIs are RELATIVE to the window top-left corner, not the full screen.",
+    "Classic Minesweeper Expert board is approx 500x400px.",
+    "If detection fails, recalibrate with: python tools/calibrate_rois.py --capture"
   ],
 
   "hud": {
     "health": {
-      "roi": [726, 376, 78, 32],
+      "roi": [16, 16, 78, 32],
       "method": "ocr_number",
       "range": [0, 999],
-      "_label": "mines remaining counter (top-left of Minesweeper header bar)"
+      "_label": "mines remaining counter (top-left of window header bar)"
     },
     "credits": {
-      "roi": [1118, 376, 78, 32],
+      "roi": [408, 16, 78, 32],
       "method": "ocr_number",
       "range": [0, 999],
-      "_label": "timer seconds (top-right of Minesweeper header bar)"
+      "_label": "timer seconds (top-right of window header bar)"
     },
     "phase": {
-      "roi": [936, 372, 40, 40],
+      "roi": [226, 16, 40, 40],
       "method": "face_state",
-      "_label": "game state face button (center of Minesweeper header bar)"
+      "_label": "game state face button (center of window header bar)"
     }
   },
 

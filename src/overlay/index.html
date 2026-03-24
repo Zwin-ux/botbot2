@@ -151,6 +151,36 @@
       transition: height 0.1s steps(1);
     }
     #phase-bar.show { height: 18px; }
+
+    /* ── Status bar (NES footer) ── */
+    #status-bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 8px;
+      border-top: 1px solid var(--dim);
+      background: var(--bg);
+      font-size: 8px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--dark);
+    }
+    #status-bar .st-dot {
+      width: 5px; height: 5px; flex-shrink: 0;
+      background: var(--dim);
+    }
+    #status-bar .st-dot.ok  { background: var(--green); }
+    #status-bar .st-dot.err { background: var(--red); animation: chkpulse 0.7s step-end infinite; }
+    @keyframes chkpulse { 0%,100% { background: var(--red); } 50% { background: var(--dim); } }
+    #status-text { flex: 1; }
+
+    /* ── NES restart button ── */
+    #btn-restart {
+      display: none;
+      -webkit-app-region: no-drag;
+      background: var(--panel2); border: 1px solid var(--red);
+      color: var(--red); font: bold 8px 'Courier New', monospace;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 1px 6px; cursor: pointer;
+    }
+    #btn-restart:hover { background: #1C0808; border-color: var(--orange); color: var(--orange); }
+    #btn-restart.show { display: block; }
   </style>
 </head>
 <body>
@@ -174,6 +204,11 @@
 
     <div id="feed"></div>
     <div id="phase-bar"></div>
+    <div id="status-bar">
+      <div class="st-dot" id="st-dot"></div>
+      <span id="status-text">STANDBY</span>
+      <button id="btn-restart">RETRY</button>
+    </div>
 
   </div>
   <script src="renderer.js"></script>

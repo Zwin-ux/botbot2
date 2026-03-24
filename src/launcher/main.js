@@ -271,6 +271,40 @@ function registerOverlayIPC(orch) {
   });
 }
 
+// ── Game switching ───────────────────────────────────────────────────────────
+
+async function switchGame(game) {
+  if (!VALID_GAMES.includes(game)) return;
+
+  log.info(`[main] Switching game to: ${game}`);
+  config.activeProfile = game;
+
+  // Persist to user-config so it survives restart
+  try {
+    const cfgPath = path.join(app.getPath('userData'), 'user-config.json');
+    const userCfg = fs.existsSync(cfgPath)
+      ? JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+      : {};
+    userCfg.activeProfile = game;
+    fs.writeFileSync(cfgPath, JSON.stringify(userCfg, null, 2));
+  } catch (err) {
+    log.warn('Could not persist game choice:', err.message);
+  }
+
+  // Restart vision service with new profile
+  if (orchestrator) {
+    try {
+      await orchestrator.restartService('vision');
+      log.info(`[main] Vision restarted for ${game}`);
+    } catch (err) {
+      log.error(`[main] Vision restart failed: ${err.message}`);
+    }
+  }
+
+  // Rebuild tray to show updated radio selection
+  createTray({ hasOverlay: !!overlayWindow });
+}
+
 // ── Tray ──────────────────────────────────────────────────────────────────────
 
 function createTray({ hasOverlay }) {
@@ -285,11 +319,22 @@ function createTray({ hasOverlay }) {
   }
   tray = new Tray(icon);
 
+  const gameChoices = VALID_GAMES.map(g => ({
+    label: g.charAt(0).toUpperCase() + g.slice(1),
+    type: 'radio',
+    checked: config.activeProfile === g,
+    click: () => switchGame(g),
+  }));
+
   const menu = Menu.buildFromTemplate([
     ...(hasOverlay ? [
       { label: 'Show Overlay',  click: () => overlayWindow?.show() },
       { label: 'Hide Overlay',  click: () => overlayWindow?.hide() },
       { type: 'separator' },
+      {
+        label: 'Switch Game',
+        submenu: gameChoices,
+      },
       {
         label: 'Services',
         submenu: [
@@ -297,6 +342,14 @@ function createTray({ hasOverlay }) {
           { label: 'Restart Vision', click: () => orchestrator?.restartService('vision') },
         ],
       },
+      { type: 'separator' },
+      { label: 'View Logs', click: () => {
+        const logPath = path.join(app.getPath('userData'), 'logs/main.log');
+        shell.openPath(logPath);
+      }},
+      { label: 'Report Bug', click: () => {
+        shell.openExternal('https://github.com/Zwin-ux/botbot2/issues/new');
+      }},
       { type: 'separator' },
     ] : [
       { label: 'Setup in progress…', enabled: false },

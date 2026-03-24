@@ -14,6 +14,9 @@ const hpTrack  = document.getElementById('hp-track');
 const hpNum    = document.getElementById('hp-num');
 const credNum  = document.getElementById('cred-num');
 const phaseBar = document.getElementById('phase-bar');
+const stDot    = document.getElementById('st-dot');
+const stText   = document.getElementById('status-text');
+const btnRetry = document.getElementById('btn-restart');
 
 const HP_SEGS    = 10;
 const MAX_ALERTS = 4;
@@ -52,11 +55,24 @@ function clearConnecting() {
 
 function showError(message) {
   clearConnecting();
+  // Remove previous error if any
+  const prev = document.getElementById('error-msg');
+  if (prev) prev.remove();
+
   const el = document.createElement('div');
   el.id        = 'error-msg';
   el.className = 'alert critical';
   el.innerHTML = `<span class="alert-pfx">!!!</span>${esc(message).toUpperCase()}`;
   feed.appendChild(el);
+
+  // Update NES status bar
+  setStatus('err', 'SERVICE DOWN');
+  btnRetry.classList.add('show');
+}
+
+function setStatus(state, text) {
+  stDot.className = `st-dot ${state}`;
+  stText.textContent = text;
 }
 
 // ── Game-aware labels ─────────────────────────────────────────────────────────
@@ -71,9 +87,9 @@ if (activeGame === 'MINESWEEPER') {
 }
 
 showConnecting();
+setStatus('', 'STANDBY');
 
 // ── Service error handler ────────────────────────────────────────────────────
-// Surface critical service failures so consumers aren't left guessing.
 
 if (window.gp.onServiceError) {
   window.gp.onServiceError((msg) => {
@@ -81,10 +97,38 @@ if (window.gp.onServiceError) {
   });
 }
 
+// ── Restart button (NES RETRY) ──────────────────────────────────────────────
+
+btnRetry.addEventListener('click', async () => {
+  btnRetry.classList.remove('show');
+  setStatus('', 'RESTARTING...');
+
+  // Remove error message
+  const errEl = document.getElementById('error-msg');
+  if (errEl) errEl.remove();
+
+  // Request service restart via IPC
+  if (window.gp.restartVision) {
+    try {
+      await window.gp.restartVision();
+      setStatus('ok', 'RESTARTED');
+      connected = false;
+      showConnecting();
+    } catch {
+      showError('RESTART FAILED -- USE TRAY MENU');
+    }
+  }
+});
+
 // ── Game event handler ────────────────────────────────────────────────────────
 
 window.gp.onGameEvent((event) => {
-  if (!connected) { connected = true; clearConnecting(); }
+  if (!connected) {
+    connected = true;
+    clearConnecting();
+    setStatus('ok', 'LIVE');
+    btnRetry.classList.remove('show');
+  }
   conn.className = 'live';
 
   switch (event.type) {

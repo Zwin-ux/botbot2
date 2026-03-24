@@ -367,7 +367,12 @@ def main():
 
     _dep_check()  # warn but don't abort — partial functionality is better than nothing
 
-    cap      = ScreenCapture(monitor_index=1)
+    # Load profile to check for window targeting (windowed games)
+    from detect import _load_profile
+    profile = _load_profile(args.game)
+    window_title = profile.get("window", {}).get("title")
+
+    cap      = ScreenCapture(monitor_index=1, window_title=window_title)
     detector = FrameDetector(args.game, capture_res=cap.resolution)
     client   = AgentClient(AGENT_INGEST)
 

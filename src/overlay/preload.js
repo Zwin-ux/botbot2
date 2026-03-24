@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld('gp', {
   // Query service status
   getStatus: () => ipcRenderer.invoke('services:status'),
 
+  // Restart vision service from overlay
+  restartVision: () => ipcRenderer.invoke('services:restart', 'vision'),
+
   // Toggle click-through mode
   setClickThrough: (v) => ipcRenderer.invoke('overlay:setClickThrough', v),
 });
