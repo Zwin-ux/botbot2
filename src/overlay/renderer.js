@@ -122,12 +122,23 @@ btnRetry.addEventListener('click', async () => {
 
 // ── Game event handler ────────────────────────────────────────────────────────
 
+// ── First-connect tips (game-specific) ──────────────────────────────────────
+
+const FIRST_CONNECT_TIPS = {
+  MINESWEEPER: { message: 'Reading mines + timer -- GL HF', priority: 'info', ttl: 5000 },
+  VALORANT:    { message: 'Tracking HP, credits, abilities', priority: 'info', ttl: 5000 },
+};
+
 window.gp.onGameEvent((event) => {
   if (!connected) {
     connected = true;
     clearConnecting();
     setStatus('ok', 'LIVE');
     btnRetry.classList.remove('show');
+
+    // Show game-specific welcome tip on first connection
+    const tip = FIRST_CONNECT_TIPS[activeGame];
+    if (tip) pushAlert(tip.message, tip.priority, tip.ttl);
   }
   conn.className = 'live';
 

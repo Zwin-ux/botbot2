@@ -34,18 +34,22 @@ Check items off as completed. Sections are ordered by priority.
       template images (`assets/spike_*.png`) do not exist; field always returns null
 - [x] **Round end detection** — `round.end` event now emitted for `end_win`/`end_loss` phase transitions
 - [x] **Phase `template_match`** → changed `method` to `ocr_keyword`; no longer requires template images
+- [x] **Minesweeper game_lost rule** — fixed trigger from `round.buy_phase` to `round.end`; added `game_won` rule
+- [x] **Config import crash** — `config` was missing from main.js; tray + game switching now work
 
 ### Calibration
-- [ ] **Calibrate health ROI** against a real Valorant screenshot
-- [ ] **Calibrate credits ROI** (visible only during buy phase)
-- [ ] **Calibrate round number ROI**
-- [ ] **Calibrate phase ROI**
+- [x] **Calibrate Minesweeper ROIs** — documented classic layout measurements (mine counter, timer, face button)
+- [ ] **Calibrate Valorant health ROI** against a real Valorant screenshot
+- [ ] **Calibrate Valorant credits ROI** (visible only during buy phase)
+- [ ] **Calibrate Valorant round number ROI**
+- [ ] **Calibrate Valorant phase ROI**
 - [ ] **Calibrate all 4 ability slots** (C, Q, E, X) — tune brightness + saturation thresholds
-- [ ] Update `profile.json` `version` to `3.0.0` once ROIs are confirmed
 
 ### Documentation
 - [x] Add `src/profiles/README.md` — profile authoring spec (HUD methods, rule schema, canonical phase strings)
 - [x] Add `docs/adding-a-game.md` — step-by-step new game profile guide
+- [x] Add troubleshooting section to `README.md`
+- [x] Add CEO spec (`docs/CEO-SPEC-CONSUMER-READY-v1.md`)
 
 ---
 
@@ -57,7 +61,7 @@ Check items off as completed. Sections are ordered by priority.
 
 ### Packaging
 - [ ] Test `npm run build` produces a working `.exe` installer
-- [ ] Verify Tesseract path auto-detection works after NSIS install
+- [x] Tesseract path auto-detection + persistence to user-config.json
 - [ ] Bundle Python vision service into the Electron package
       (`package.json` `extraResources` already configured — verify it works)
 - [ ] Add `scripts/setup.bat` for one-click Windows setup
@@ -71,9 +75,21 @@ Check items off as completed. Sections are ordered by priority.
 - [x] Add Minesweeper game profile — proves the architecture is generic with a simpler game
 
 ### Overlay UX
-- [ ] Add position drag (click-and-drag overlay to reposition)
-- [ ] Add opacity slider in tray menu
-- [ ] Add "click-through" toggle in tray menu (already in config, needs tray wiring)
+- [x] Overlay position persists across restarts (saved to user-config.json on drag)
+- [x] Opacity presets in tray menu (100%, 80%, 60%, 40%)
+- [x] Click-through toggle in tray menu
+- [x] Game-specific first-connect welcome tip
+- [x] Game-aware header labels (Minesweeper: HP→MINES, $→timer)
+- [x] NES-styled RETRY button on service crash
+- [x] Connection status bar (STANDBY → LIVE → SERVICE DOWN)
+- [ ] Add `docs/calibration.md` — step-by-step calibration walkthrough with screenshots
+
+### Tray menu
+- [x] Switch Game submenu (radio buttons, persists to user-config)
+- [x] Restart Agent / Restart Vision
+- [x] View Logs (opens log file)
+- [x] Report Bug (opens GitHub Issues)
+- [x] Overlay submenu (click-through, opacity)
 
 ---
 
@@ -84,11 +100,16 @@ Check items off as completed. Sections are ordered by priority.
 | Arrow key nudge in calibrator may not work on some Windows OpenCV builds | `tools/calibrate_rois.py` | Low | Open |
 | Kill feed OCR stub always returns `[]` | `detector.py` | Medium | Open |
 | Spike state detection needs template images | `detector.py`, `assets/` | Medium | Open |
-| Electron `nativeImage.createEmpty()` used for tray — replace with real icon | `launcher/main.js` | Low | Open |
+| Valorant ROIs unverified against live game | `valorant/profile.json` | High | Open |
+| ~~`config` not imported in main.js — tray + game switching crash~~ | `main.js` | Critical | **Fixed** |
 | ~~`phase` method is `template_match` but templates not shipped~~ | `profile.json` | Medium | **Fixed** |
-| ~~`buy_phase_save` rule checks `payload.amount` but `BUY_PHASE` event payload sends `credits`~~ | `profile.json` | High | **Fixed** (field is `payload.credits`) |
+| ~~`buy_phase_save` rule checks `payload.amount`~~ | `profile.json` | High | **Fixed** |
 | ~~`round.end` event never emitted~~ | `normalizer.js` | Medium | **Fixed** |
 | ~~`prevState` in spike event captured after state mutation~~ | `normalizer.js` | Low | **Fixed** |
+| ~~Minesweeper `game_lost` rule never fires~~ | `minesweeper/profile.json` | High | **Fixed** |
+| ~~Tesseract path not persisted after install~~ | `main.js`, `orchestrator.js` | High | **Fixed** |
+| ~~Overlay position resets on restart~~ | `overlay/window.js` | Medium | **Fixed** |
+| ~~No click-through / opacity controls~~ | tray menu | Medium | **Fixed** |
 
 ---
 
@@ -98,24 +119,5 @@ Check items off as completed. Sections are ordered by priority.
 2. **[enhancement] Ship spike state template images or switch to contour detection**
 3. **[enhancement] Calibrate default Valorant ROIs and update profile.json**
 4. **[docs] Add calibration walkthrough with screenshots**
-
----
-
-## Git workflow suggestion
-
-```bash
-# Initial push
-git init
-git remote add origin https://github.com/Zwin-ux/botbot2.git
-git add .
-git commit -m "feat: initial GamePartner MVP — launcher, vision, agent, overlay"
-git branch -M main
-git push -u origin main
-
-# Then for each checklist item above:
-git checkout -b fix/<issue-name>
-# ... work ...
-git commit -m "fix: <description>"
-git push origin fix/<issue-name>
-# Open PR
-```
+5. **[enhancement] BYOK — LLM-powered contextual advice via user API key**
+6. **[enhancement] Session stats screen (NES-styled, reads from SQLite)**
