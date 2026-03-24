@@ -4,7 +4,7 @@
 
 const state = {
   step:        0,
-  game:        'valorant',
+  game:        'minesweeper',
   res:         '1920x1080',
   depsChecked: false,
   packaged:    false,

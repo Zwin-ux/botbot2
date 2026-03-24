@@ -1,0 +1,90 @@
+{
+  "name": "Minesweeper",
+  "game": "minesweeper",
+  "version": "1.0.0",
+  "resolution": [1920, 1080],
+  "maxDecisionsPerFrame": 1,
+
+  "hud": {
+    "health": {
+      "roi": [30, 60, 90, 38],
+      "method": "ocr_number",
+      "range": [0, 999],
+      "_label": "mines remaining (mapped to health field)"
+    },
+    "credits": {
+      "roi": [340, 60, 90, 38],
+      "method": "ocr_number",
+      "range": [0, 999],
+      "_label": "timer seconds (mapped to credits field)"
+    },
+    "phase": {
+      "roi": [195, 55, 50, 50],
+      "method": "face_state",
+      "_label": "game state face: playing / won / lost"
+    }
+  },
+
+  "rules": [
+    {
+      "id": "almost_done",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$lte": 3, "$gt": 0 } },
+      "priority": "medium",
+      "cooldown": 30000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "Almost done -- scan edges carefully",
+        "ttl": 8000
+      }
+    },
+    {
+      "id": "halfway_done",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$lte": 10, "$gt": 3 } },
+      "priority": "low",
+      "cooldown": 60000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "Good progress -- stay focused",
+        "ttl": 5000
+      }
+    },
+    {
+      "id": "taking_long",
+      "trigger": "economy.credits",
+      "condition": { "payload.amount": { "$gte": 180 } },
+      "priority": "low",
+      "cooldown": 60000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "3 min in -- look for number patterns",
+        "ttl": 6000
+      }
+    },
+    {
+      "id": "speed_run",
+      "trigger": "economy.credits",
+      "condition": { "payload.amount": { "$lte": 30 } },
+      "priority": "info",
+      "cooldown": 90000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "Speed run pace -- nice",
+        "ttl": 4000
+      }
+    },
+    {
+      "id": "game_lost",
+      "trigger": "round.buy_phase",
+      "condition": { "payload.credits": { "$eq": -1 } },
+      "priority": "high",
+      "cooldown": 5000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": {
+        "message": "Boom! Try again",
+        "ttl": 6000
+      }
+    }
+  ]
+}

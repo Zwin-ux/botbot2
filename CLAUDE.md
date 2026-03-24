@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GamePartner** is a local-first AI gaming companion. It captures the screen at 2 FPS, runs CV/OCR to extract game state, and surfaces tactical suggestions via an always-on-top Electron overlay. Currently supports Valorant. No cloud dependency — everything runs on localhost.
+**GamePartner** is a local-first AI gaming companion. It captures the screen at 2 FPS, runs CV/OCR to extract game state, and surfaces tactical suggestions via an always-on-top Electron overlay. Supports Minesweeper (fully) and Valorant (beta). No cloud dependency — everything runs on localhost.
 
 System requirements: Node.js ≥ 18, Python ≥ 3.10, Tesseract OCR ≥ 5.0 (install separately on Windows — not pip-installable).
 
@@ -95,6 +95,6 @@ The rule engine in `decision_engine.js` reads rules from `profile.json` — game
 ## Known Gaps (from CHECKLIST.md)
 
 - Kill feed OCR not implemented (`_read_kill_feed()` returns `[]`)
-- Spike state detection needs template images (assets not shipped)
-- `buy_phase_save` rule bug: checks `payload.amount` but event sends `payload.credits`
+- Spike state detection needs template images (assets not shipped, spikeState HUD entry removed)
 - Default Valorant ROIs calibrated for 1920×1080 — needs verification
+- Minesweeper ROIs need calibration against actual Microsoft Minesweeper window

@@ -33,15 +33,8 @@
     "killFeed": {
       "roi": [1400, 60, 500, 300],
       "method": "ocr_killfeed",
-      "maxEntries": 5
-    },
-    "spikeState": {
-      "method": "multi_template",
-      "states": {
-        "planted":   "assets/spike_planted.png",
-        "defused":   "assets/spike_defused.png",
-        "detonated": "assets/spike_boom.png"
-      }
+      "maxEntries": 5,
+      "_status": "stub — not yet implemented, returns []"
     }
   },
 

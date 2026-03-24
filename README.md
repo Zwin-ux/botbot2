@@ -5,13 +5,19 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/status-BETA-F8C038?style=flat-square" alt="Beta" />
+  <img src="https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-3CBCFC?style=flat-square" alt="Windows" />
+  <img src="https://img.shields.io/badge/license-MIT-38C840?style=flat-square" alt="MIT" />
+</p>
+
+<p align="center">
   <a href="https://github.com/Zwin-ux/botbot2/releases/latest">
     <img src="https://img.shields.io/badge/Download%20for%20Windows-%E2%AC%87%20GamePartner--Setup.exe-F8C038?style=for-the-badge&logo=windows&logoColor=000000" alt="Download GamePartner" />
   </a>
 </p>
 
 <p align="center">
-  <strong>Windows 10 / 11 &nbsp;&bull;&nbsp; 64-bit &nbsp;&bull;&nbsp; No Python or extra tools required</strong>
+  <strong>Your AI Player 2 &nbsp;&bull;&nbsp; Always available &nbsp;&bull;&nbsp; 100% local</strong>
 </p>
 
 ---
@@ -29,13 +35,19 @@
 
 ## What it does
 
-GamePartner watches your screen while you play and shows real-time tips in a small overlay — like having a coach in the corner of your monitor.
+GamePartner watches your screen while you play and shows real-time tips in a small overlay — like having a coach in the corner of your monitor. Drop the EXE and you always have a Player 2.
 
 - Reads your HP, credits, and game phase from the screen (no game files touched)
 - Suggests when to save, buy, or use abilities
 - Works 100% offline — nothing leaves your PC
+- BYOK (Bring Your Own Key) — no subscriptions, no cloud
 
-**Currently supports:** Valorant &nbsp;·&nbsp; More games coming soon
+**Supported games:**
+- **Minesweeper** — fully supported (great for testing!)
+- **Valorant** — beta support (HP, credits, abilities, phase detection)
+- More games coming soon
+
+> **Quick start:** Try Minesweeper first — open Windows Minesweeper, launch GamePartner, and watch the overlay read your mine count and timer in real time.
 
 ---
 

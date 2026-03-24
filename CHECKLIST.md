@@ -23,7 +23,7 @@ Check items off as completed. Sections are ordered by priority.
 
 ### Repository hygiene
 - [x] `LICENSE` file present at project root (MIT)
-- [ ] Confirm `package.json` `name`, `version`, `description` are accurate
+- [x] Confirm `package.json` `name`, `version`, `description` are accurate
 - [ ] Remove any leftover debug `console.log` / `print` statements
 - [ ] Audit all `TODO` / `FIXME` / `STUB` comments — either resolve or file as issues
 
@@ -68,7 +68,7 @@ Check items off as completed. Sections are ordered by priority.
 
 ### Multi-game
 - [x] Define `src/profiles/README.md` — spec for what a valid profile must contain
-- [ ] Stub out a second game profile (e.g. CS2) to prove the architecture is generic
+- [x] Add Minesweeper game profile — proves the architecture is generic with a simpler game
 
 ### Overlay UX
 - [ ] Add position drag (click-and-drag overlay to reposition)
