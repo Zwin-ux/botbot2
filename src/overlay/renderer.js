@@ -84,6 +84,11 @@ if (activeGame === 'MINESWEEPER') {
   const credSym = document.querySelector('.cred-sym');
   if (hpLabel) hpLabel.textContent = 'MINES';
   if (credSym) credSym.textContent = '\u23F1';  // timer icon
+} else if (activeGame === 'SOLITAIRE') {
+  const hpLabel = document.querySelector('.hp-label');
+  const credSym = document.querySelector('.cred-sym');
+  if (hpLabel) hpLabel.textContent = 'PTS';
+  if (credSym) credSym.textContent = '\u2660';  // spade icon
 }
 
 showConnecting();
@@ -128,6 +133,7 @@ const FIRST_CONNECT_TIPS = {
   MINESWEEPER: { message: 'Reading mines + timer -- GL HF', priority: 'info', ttl: 5000 },
   VALORANT:    { message: 'Tracking HP, credits, abilities', priority: 'info', ttl: 5000 },
   CS2:         { message: 'Tracking HP, money, round phase', priority: 'info', ttl: 5000 },
+  SOLITAIRE:   { message: 'Tracking score + moves -- GL', priority: 'info', ttl: 5000 },
 };
 
 window.gp.onGameEvent((event) => {

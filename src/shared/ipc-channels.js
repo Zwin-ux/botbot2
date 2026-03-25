@@ -45,7 +45,7 @@ const IPC = {
 };
 
 // Valid values — used in both main (server-side guard) and preload (client-side guard)
-const VALID_GAMES       = ['valorant', 'minesweeper', 'cs2'];
+const VALID_GAMES       = ['minesweeper', 'solitaire', 'valorant', 'cs2'];
 const VALID_RESOLUTIONS = ['1920x1080', '2560x1440', '3840x2160'];
 
 module.exports = { IPC, VALID_GAMES, VALID_RESOLUTIONS };

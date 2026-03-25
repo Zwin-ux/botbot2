@@ -20,6 +20,10 @@
   <strong>Your AI Player 2 &nbsp;&bull;&nbsp; Always available &nbsp;&bull;&nbsp; 100% local</strong>
 </p>
 
+<p align="center">
+  <img src="assets/demo.png" width="320" alt="GamePartner overlay — NES-style HUD" />
+</p>
+
 ---
 
 ## Install in 3 steps
@@ -37,17 +41,21 @@
 
 GamePartner watches your screen while you play and shows real-time tips in a small overlay — like having a coach in the corner of your monitor. Drop the EXE and you always have a Player 2.
 
-- Reads your HP, credits, and game phase from the screen (no game files touched)
-- Suggests when to save, buy, or use abilities
+- Reads game state directly from screen pixels (no game files touched, no injection)
+- Shows contextual suggestions as you play
 - Works 100% offline — nothing leaves your PC
-- BYOK (Bring Your Own Key) — no subscriptions, no cloud
+- Supports any windowed or fullscreen game with visible HUD elements
 
 **Supported games:**
-- **Minesweeper** — fully supported (great for testing!)
-- **Valorant** — beta support (HP, credits, abilities, phase detection)
-- More games coming soon
 
-> **Quick start:** Try Minesweeper first — open Windows Minesweeper, launch GamePartner, and watch the overlay read your mine count and timer in real time.
+| Game | Status | What it reads |
+|------|--------|---------------|
+| **Minesweeper** | Ready | Mine count, timer, win/lose state |
+| **Solitaire** | Ready | Score, move count, game state |
+| **Valorant** | Beta | HP, credits, abilities, round phase, kill feed |
+| **CS2** | Beta | HP, money, round phase |
+
+> **Quick start:** Open Minesweeper or Solitaire, launch GamePartner, pick the game — the overlay starts reading your game state immediately. No config needed.
 
 ---
 
@@ -79,8 +87,9 @@ npm run dist        # PyInstaller + electron-builder → dist/installer/*.exe
 
 **Run tests (no game, no Tesseract needed):**
 ```bash
-npm test            # JS normalizer
-npm run test:python # Python vision pipeline (synthetic profile)
+npm test            # JS normalizer + decision engine (108 tests)
+npm run test:python # Python vision pipeline (48 tests)
+npm run test:all    # Everything (156 tests)
 ```
 
 ---

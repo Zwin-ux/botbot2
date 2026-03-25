@@ -471,6 +471,59 @@ section('SUITE I — CS2 profile rules (real profile)');
   assert(d7[0].ruleId === 'health_critical', 'CS2 supersedes: health_critical wins over health_low');
 }
 
+// ── SUITE J: Solitaire profile rules ────────────────────────────────────────
+
+section('SUITE J — Solitaire profile rules (real profile)');
+
+{
+  const fs = require('fs');
+  const profilePath = path.join(__dirname, '../src/profiles/solitaire/profile.json');
+  const profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+
+  // high_score: health.change with score >= 500
+  const engine1 = new DecisionEngine(profile.rules, { maxDecisionsPerFrame: profile.maxDecisionsPerFrame });
+  const ev1a = makeEvent('health.change', { current: 600 });
+  engine1.evaluate(ev1a, []);
+  const ev1b = makeEvent('health.change', { current: 620 });
+  const d1 = engine1.evaluate(ev1b, []);
+  assert(d1.length === 1, 'Solitaire high_score fires at 600+');
+  assert(d1[0].message.includes('500+'), 'Solitaire high_score: correct message');
+
+  // many_moves: economy.credits with amount >= 100
+  const engine2 = new DecisionEngine(profile.rules, { maxDecisionsPerFrame: profile.maxDecisionsPerFrame });
+  const ev2a = makeEvent('economy.credits', { amount: 120 });
+  engine2.evaluate(ev2a, []);
+  const ev2b = makeEvent('economy.credits', { amount: 125 });
+  const d2 = engine2.evaluate(ev2b, []);
+  assert(d2.length === 1, 'Solitaire many_moves fires at 120');
+  assert(d2[0].message.includes('hidden plays'), 'Solitaire many_moves: correct message');
+
+  // game_won: round.end with winner=self
+  const engine3 = new DecisionEngine(profile.rules, { maxDecisionsPerFrame: profile.maxDecisionsPerFrame });
+  const evWon = makeEvent('round.end', { winner: 'self' });
+  const dWon = engine3.evaluate(evWon, []);
+  assert(dWon.length === 1, 'Solitaire game_won fires');
+  assert(dWon[0].message.includes('GG'), 'Solitaire game_won: correct message');
+
+  // stuck supersedes many_moves: 200+ moves should only fire stuck
+  const engine4 = new DecisionEngine(profile.rules, { maxDecisionsPerFrame: profile.maxDecisionsPerFrame });
+  const ev4a = makeEvent('economy.credits', { amount: 220 });
+  engine4.evaluate(ev4a, []);
+  const ev4b = makeEvent('economy.credits', { amount: 225 });
+  engine4.evaluate(ev4b, []);
+  const ev4c = makeEvent('economy.credits', { amount: 230 });
+  const d4 = engine4.evaluate(ev4c, []);
+  // stuck needs 3 signals, and should supersede many_moves
+  assert(d4.length === 1, 'Solitaire stuck fires after 3 signals at 220+');
+  assert(d4[0].ruleId === 'stuck', 'Solitaire stuck supersedes many_moves');
+
+  // score=200 should NOT trigger high_score (needs $gte 500)
+  const engine5 = new DecisionEngine(profile.rules, { maxDecisionsPerFrame: profile.maxDecisionsPerFrame });
+  const evNo = makeEvent('health.change', { current: 200 });
+  const dNo = engine5.evaluate(evNo, []);
+  assert(dNo.length === 0, 'Solitaire score=200 does not trigger high_score (1 signal)');
+}
+
 // ── Results ─────────────────────────────────────────────────────────────────
 
 console.log(`\n${'═'.repeat(60)}`);

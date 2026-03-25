@@ -1,0 +1,116 @@
+{
+  "name": "Solitaire",
+  "game": "solitaire",
+  "version": "1.0.0",
+  "resolution": [1920, 1080],
+  "maxDecisionsPerFrame": 1,
+  "window": {
+    "title": "Solitaire",
+    "_note": "Matches 'Solitaire' in the window title. Covers Microsoft Solitaire Collection (Klondike mode), classic Solitaire, and most third-party Solitaire apps."
+  },
+
+  "_calibration_notes": [
+    "Window targeting enabled: captures only the Solitaire window.",
+    "ROIs are relative to the window's top-left corner.",
+    "",
+    "Microsoft Solitaire Collection (Klondike, default window ~1000x700):",
+    "  - Score:  top-right area, white text",
+    "  - Moves:  top-right area, below score, white text",
+    "  - Timer:  top-right area, below moves, white text",
+    "",
+    "Classic Windows Solitaire (~640x480):",
+    "  - Score:  status bar at bottom-left",
+    "  - Timer:  status bar at bottom-right",
+    "",
+    "These ROIs target classic Solitaire. For Microsoft Solitaire Collection,",
+    "recalibrate with: python tools/calibrate_rois.py --capture --game solitaire",
+    "",
+    "Detection approach: score + move count via OCR, game state via card-area",
+    "brightness analysis (empty tableau = game not started, all foundations",
+    "filled = won)."
+  ],
+
+  "hud": {
+    "health": {
+      "roi": [500, 455, 70, 18],
+      "method": "ocr_number",
+      "range": [0, 9999],
+      "_label": "score — classic Solitaire status bar, bottom area"
+    },
+    "credits": {
+      "roi": [345, 455, 50, 18],
+      "method": "ocr_number",
+      "range": [0, 999],
+      "_label": "move count — status bar, tracks total moves made"
+    },
+    "phase": {
+      "roi": [20, 40, 600, 400],
+      "method": "tableau_analysis",
+      "_label": "game state — analyse the tableau area for card presence / win state"
+    }
+  },
+
+  "rules": [
+    {
+      "id": "high_score",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$gte": 500 } },
+      "priority": "medium",
+      "cooldown": 120000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "500+ points -- looking good",
+        "ttl": 5000
+      }
+    },
+    {
+      "id": "many_moves",
+      "trigger": "economy.credits",
+      "condition": { "payload.amount": { "$gte": 100 } },
+      "priority": "low",
+      "cooldown": 120000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "100+ moves -- check for hidden plays",
+        "ttl": 6000
+      }
+    },
+    {
+      "id": "efficient_play",
+      "trigger": "economy.credits",
+      "condition": { "payload.amount": { "$lte": 30 } },
+      "priority": "info",
+      "cooldown": 120000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "Efficient start -- nice pace",
+        "ttl": 4000
+      }
+    },
+    {
+      "id": "game_won",
+      "trigger": "round.end",
+      "condition": { "payload.winner": { "$eq": "self" } },
+      "priority": "high",
+      "cooldown": 5000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": {
+        "message": "Solitaire complete! GG",
+        "ttl": 10000
+      }
+    },
+    {
+      "id": "stuck",
+      "trigger": "economy.credits",
+      "condition": { "payload.amount": { "$gte": 200 } },
+      "priority": "medium",
+      "cooldown": 180000,
+      "confidence": { "minSignals": 3, "window": 5000 },
+      "supersedes": ["many_moves"],
+      "output": {
+        "message": "200+ moves -- consider restarting",
+        "ttl": 8000
+      }
+    }
+  ]
+}
