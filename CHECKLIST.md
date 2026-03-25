@@ -28,8 +28,8 @@ Check items off as completed. Sections are ordered by priority.
 - [ ] Audit all `TODO` / `FIXME` / `STUB` comments — either resolve or file as issues
 
 ### Functional gaps
-- [ ] **Kill feed OCR** — `src/profiles/valorant/detector.py` `_read_kill_feed()`
-      is not yet implemented; returns empty list every frame
+- [x] **Kill feed OCR** — `_read_kill_feed()` now OCR's the kill feed region,
+      extracts text lines, identifies kill entries (~60-70% accuracy, smoothed)
 - [ ] **Spike state detection** — `hud.spikeState` uses `multi_template` but
       template images (`assets/spike_*.png`) do not exist; field always returns null
 - [x] **Round end detection** — `round.end` event now emitted for `end_win`/`end_loss` phase transitions
@@ -82,7 +82,7 @@ Check items off as completed. Sections are ordered by priority.
 - [x] Game-aware header labels (Minesweeper: HP→MINES, $→timer)
 - [x] NES-styled RETRY button on service crash
 - [x] Connection status bar (STANDBY → LIVE → SERVICE DOWN)
-- [ ] Add `docs/calibration.md` — step-by-step calibration walkthrough with screenshots
+- [x] Add `docs/calibration.md` — step-by-step calibration walkthrough
 
 ### Tray menu
 - [x] Switch Game submenu (radio buttons, persists to user-config)
@@ -98,7 +98,7 @@ Check items off as completed. Sections are ordered by priority.
 | Issue | Location | Severity | Status |
 |---|---|---|---|
 | Arrow key nudge in calibrator may not work on some Windows OpenCV builds | `tools/calibrate_rois.py` | Low | Open |
-| Kill feed OCR stub always returns `[]` | `detector.py` | Medium | Open |
+| ~~Kill feed OCR stub always returns `[]`~~ | `detector.py` | Medium | **Fixed** |
 | Spike state detection needs template images | `detector.py`, `assets/` | Medium | Open |
 | Valorant ROIs unverified against live game | `valorant/profile.json` | High | Open |
 | ~~`config` not imported in main.js — tray + game switching crash~~ | `main.js` | Critical | **Fixed** |

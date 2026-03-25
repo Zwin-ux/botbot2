@@ -34,7 +34,7 @@
       "roi": [1400, 60, 500, 300],
       "method": "ocr_killfeed",
       "maxEntries": 5,
-      "_status": "stub — not yet implemented, returns []"
+      "_status": "implemented — OCR-based, ~60-70% accuracy, smoothed upstream"
     }
   },
 

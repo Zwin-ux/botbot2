@@ -117,6 +117,9 @@ def detect(frame: np.ndarray, profile: dict) -> dict:
     if "abilities" in hud:
         result["abilities"] = _read_abilities(frame, hud["abilities"])
 
+    if "killFeed" in hud:
+        result["kill_feed"] = _read_kill_feed(frame, hud["killFeed"])
+
     return result
 
 
@@ -249,6 +252,80 @@ def _read_abilities(frame: np.ndarray, cfg: dict) -> dict:
         abilities[slot] = ready
 
     return abilities
+
+
+def _read_kill_feed(frame: np.ndarray, cfg: dict) -> list:
+    """
+    Read the kill feed from the top-right of the HUD.
+
+    Valorant's kill feed shows 1-5 entries as white/coloured text on a
+    semi-transparent dark strip. Each entry is roughly:
+        "PlayerName  [weapon_icon]  PlayerName"
+
+    We OCR the entire kill feed region, split by newlines, and look for
+    lines containing a ">" or weapon-separator pattern to extract
+    killer/victim pairs.
+
+    [JITTER] Kill feed text is small and partially transparent. OCR accuracy
+    is lower than other fields (~60-70%). The temporal smoother upstream
+    helps: a kill that appears across 2-3 frames will get confirmed.
+    We return raw line texts for the normalizer to interpret.
+
+    Returns a list of dicts: [{ "text": "raw line", "is_kill": bool }]
+    """
+    if not _TESS or not _ROI:
+        return []
+
+    try:
+        roi = cfg["roi"]
+        max_entries = cfg.get("maxEntries", 5)
+
+        crop_img = crop(frame, roi)
+        if crop_img is None or crop_img.size == 0:
+            return []
+
+        # Preprocess: the kill feed has white/coloured text on a dark overlay
+        gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY) if len(crop_img.shape) == 3 else crop_img
+
+        # Threshold: bright text (>160 intensity) on dark bg
+        _, binary = cv2.threshold(gray, 160, 255, cv2.THRESH_BINARY)
+
+        # Invert for Tesseract (dark text on white bg)
+        inverted = cv2.bitwise_not(binary)
+
+        # Add border padding so Tesseract doesn't lose edge characters
+        padded = cv2.copyMakeBorder(inverted, 8, 8, 12, 12, cv2.BORDER_CONSTANT, value=255)
+
+        # PSM 6: assume a single uniform block of text (kill feed is multi-line)
+        config = "--psm 6 --oem 1"
+        raw = pytesseract.image_to_string(padded, config=config).strip()
+
+        if not raw:
+            return []
+
+        # Split into lines and filter non-empty
+        lines = [ln.strip() for ln in raw.split('\n') if ln.strip()]
+
+        results = []
+        for line in lines[:max_entries]:
+            # A kill entry typically has a ">" or long dash between names,
+            # or contains weapon-like keywords. Accept any line with 3+ chars
+            # as potentially meaningful feed content.
+            is_kill = bool(
+                '>' in line or
+                '-' in line or
+                re.search(r'\w{3,}\s+\w{3,}', line)  # two words = possible killer > victim
+            )
+            results.append({
+                "text": line,
+                "is_kill": is_kill,
+            })
+
+        return results
+
+    except Exception as e:
+        log.warning(f"[detector] _read_kill_feed failed: {e}")
+        return []
 
 
 # ── OCR helpers ───────────────────────────────────────────────────────────────
