@@ -10,9 +10,11 @@
     "dist":        "npm run build:vision && electron-builder --win --x64",
     "build":       "electron-builder --win --x64",
     "pack":        "electron-builder --dir",
-    "test":        "node tests/test_normalizer.js",
-    "test:python": "python tests/test_vision_pipeline.py",
-    "test:all":    "node tests/test_normalizer.js && python tests/test_vision_pipeline.py"
+    "test":           "node tests/test_normalizer.js && node tests/test_decision_engine.js",
+    "test:normalizer": "node tests/test_normalizer.js",
+    "test:decisions":  "node tests/test_decision_engine.js",
+    "test:python":     "python tests/test_vision_pipeline.py",
+    "test:all":        "node tests/test_normalizer.js && node tests/test_decision_engine.js && python tests/test_vision_pipeline.py"
   },
   "dependencies": {
     "better-sqlite3":  "^9.4.3",

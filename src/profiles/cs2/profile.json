@@ -1,0 +1,126 @@
+{
+  "name": "Counter-Strike 2",
+  "game": "cs2",
+  "version": "0.1.0",
+  "resolution": [1920, 1080],
+  "maxDecisionsPerFrame": 2,
+  "window": {
+    "title": "Counter-Strike",
+    "_note": "Matches 'Counter-Strike 2' or 'Counter-Strike: Global Offensive'. CS2 is typically fullscreen so window targeting falls back to full monitor capture."
+  },
+
+  "_calibration_notes": [
+    "ROIs are for 1920x1080 resolution. Auto-scaling handles other resolutions.",
+    "CS2 HUD layout:",
+    "  - Health: bottom-left, white text on dark panel",
+    "  - Armor:  bottom-left, next to health",
+    "  - Money:  bottom-left, above health (during buy phase)",
+    "  - Round:  top-center, round indicator pips",
+    "  - Kill feed: top-right, scrolling",
+    "",
+    "These ROIs are ESTIMATES and must be calibrated against a real CS2 match.",
+    "Recalibrate with: python tools/calibrate_rois.py --capture --game cs2"
+  ],
+
+  "hud": {
+    "health": {
+      "roi": [90, 1040, 60, 25],
+      "method": "ocr_number",
+      "range": [0, 100],
+      "_label": "health value — bottom-left white text"
+    },
+    "credits": {
+      "roi": [68, 1005, 80, 22],
+      "method": "ocr_number",
+      "range": [0, 16000],
+      "_label": "money — bottom-left, visible during buy and round"
+    },
+    "phase": {
+      "roi": [910, 15, 100, 25],
+      "method": "ocr_keyword",
+      "keywords": {
+        "buy": ["freeze", "buy"],
+        "combat": ["round", "live"],
+        "end_win": ["won"],
+        "end_loss": ["lost"]
+      },
+      "_label": "round timer area — top-center"
+    }
+  },
+
+  "rules": [
+    {
+      "id": "health_critical",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$lte": 25 } },
+      "priority": "critical",
+      "cooldown": 8000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "supersedes": ["health_low"],
+      "output": {
+        "message": "Critical HP -- fall back and hold angle",
+        "ttl": 5000
+      }
+    },
+    {
+      "id": "health_low",
+      "trigger": "health.change",
+      "condition": { "payload.current": { "$lte": 50, "$gt": 25 } },
+      "priority": "high",
+      "cooldown": 15000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "Low HP -- play passive",
+        "ttl": 5000
+      }
+    },
+    {
+      "id": "eco_round",
+      "trigger": "economy.credits",
+      "condition": { "payload.amount": { "$lte": 1500 } },
+      "priority": "medium",
+      "cooldown": 30000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "Low funds -- consider eco or force buy",
+        "ttl": 6000
+      }
+    },
+    {
+      "id": "full_buy",
+      "trigger": "economy.credits",
+      "condition": { "payload.amount": { "$gte": 4750 } },
+      "priority": "low",
+      "cooldown": 30000,
+      "confidence": { "minSignals": 2, "window": 3000 },
+      "output": {
+        "message": "Full buy available -- rifle + utility",
+        "ttl": 5000
+      }
+    },
+    {
+      "id": "round_lost",
+      "trigger": "round.end",
+      "condition": { "payload.winner": { "$eq": "enemy" } },
+      "priority": "medium",
+      "cooldown": 5000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": {
+        "message": "Round lost -- check economy",
+        "ttl": 5000
+      }
+    },
+    {
+      "id": "round_won",
+      "trigger": "round.end",
+      "condition": { "payload.winner": { "$eq": "self" } },
+      "priority": "info",
+      "cooldown": 5000,
+      "confidence": { "minSignals": 1, "window": 2000 },
+      "output": {
+        "message": "Round won -- nice",
+        "ttl": 4000
+      }
+    }
+  ]
+}

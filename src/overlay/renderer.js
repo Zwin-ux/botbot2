@@ -127,6 +127,7 @@ btnRetry.addEventListener('click', async () => {
 const FIRST_CONNECT_TIPS = {
   MINESWEEPER: { message: 'Reading mines + timer -- GL HF', priority: 'info', ttl: 5000 },
   VALORANT:    { message: 'Tracking HP, credits, abilities', priority: 'info', ttl: 5000 },
+  CS2:         { message: 'Tracking HP, money, round phase', priority: 'info', ttl: 5000 },
 };
 
 window.gp.onGameEvent((event) => {
