@@ -4,43 +4,44 @@
   "description": "Local-first AI gaming companion",
   "main": "src/launcher/main.js",
   "scripts": {
-    "start":       "electron .",
-    "dev":         "electron . --dev",
+    "start": "electron .",
+    "dev": "electron . --dev",
     "build:vision": "pyinstaller build/vision_service.spec --distpath dist/ --noconfirm",
-    "dist":        "npm run build:vision && electron-builder --win --x64",
-    "build":       "electron-builder --win --x64",
-    "pack":        "electron-builder --dir",
-    "test":           "node tests/test_normalizer.js && node tests/test_decision_engine.js",
+    "dist": "npm run build:vision && electron-builder --win --x64",
+    "build": "electron-builder --win --x64",
+    "pack": "electron-builder --dir",
+    "test": "node tests/test_normalizer.js && node tests/test_decision_engine.js",
     "test:normalizer": "node tests/test_normalizer.js",
-    "test:decisions":  "node tests/test_decision_engine.js",
-    "test:python":     "python tests/test_vision_pipeline.py && python tests/test_minesweeper_detector.py",
-    "test:all":        "node tests/test_normalizer.js && node tests/test_decision_engine.js && python tests/test_vision_pipeline.py && python tests/test_minesweeper_detector.py"
+    "test:decisions": "node tests/test_decision_engine.js",
+    "test:python": "python tests/test_vision_pipeline.py && python tests/test_minesweeper_detector.py",
+    "test:all": "node tests/test_normalizer.js && node tests/test_decision_engine.js && python tests/test_vision_pipeline.py && python tests/test_minesweeper_detector.py"
   },
   "dependencies": {
-    "better-sqlite3":  "^9.4.3",
-    "electron-log":    "^5.1.2",
+    "better-sqlite3": "^9.4.3",
+    "electron-log": "^5.1.2",
     "electron-updater": "^6.1.8",
-    "express":         "^4.18.3",
-    "ws":              "^8.16.0"
+    "express": "^4.18.3",
+    "ws": "^8.16.0"
   },
   "devDependencies": {
-    "electron":         "^29.1.1",
-    "electron-builder": "^24.13.3"
+    "electron": "^29.1.1",
+    "electron-builder": "^26.8.1"
   },
   "build": {
-    "appId":       "com.gamepartner.app",
+    "appId": "com.gamepartner.app",
     "productName": "GamePartner",
     "win": {
       "target": "nsis",
-      "icon":   "assets/sprite.png"
+      "icon": "assets/sprite.png",
+      "signAndEditExecutable": false
     },
     "nsis": {
-      "oneClick":                        true,
-      "perMachine":                      false,
-      "deleteAppDataOnUninstall":        false,
-      "createDesktopShortcut":           true,
-      "createStartMenuShortcut":         true,
-      "shortcutName":                    "GamePartner"
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GamePartner"
     },
     "files": [
       "src/**/*",
@@ -50,15 +51,17 @@
     ],
     "extraResources": [
       {
-        "from":   "dist/vision_server",
-        "to":     "vision",
-        "filter": ["**/*"]
+        "from": "dist/vision_server",
+        "to": "vision",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "publish": {
       "provider": "github",
-      "owner":    "Zwin-ux",
-      "repo":     "botbot2"
+      "owner": "Zwin-ux",
+      "repo": "botbot2"
     },
     "directories": {
       "output": "dist/installer"
