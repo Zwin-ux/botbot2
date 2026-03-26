@@ -42,6 +42,7 @@ Structured output from FrameDetector.detect() (what server.py sends to the agent
     }
 """
 
+import concurrent.futures
 import importlib.util
 import json
 import logging
@@ -113,6 +114,10 @@ class FrameDetector:
     match starts so smoothing history doesn't bleed across games.
     """
 
+    # Detection timeout (seconds). If a detector call (e.g. Tesseract OCR)
+    # takes longer than this, the frame is skipped and logged as a timeout.
+    DETECT_TIMEOUT_S = 3.0
+
     def __init__(self, game: str, capture_res: tuple = REFERENCE_RES):
         self.game        = game
         self.capture_res = capture_res
@@ -120,6 +125,8 @@ class FrameDetector:
         self._detect_fn  = _load_detector(game)
         self._bank       = self._build_smoother_bank()
         self._frame_count = 0
+        self._timeout_count = 0
+        self._executor   = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -136,8 +143,18 @@ class FrameDetector:
         profile = self._scale_profile_rois(frame_meta)
 
         # ── Raw detection (stateless, per-frame) ─────────────────────────────
+        # Run detector in a thread with a timeout to protect against Tesseract
+        # hangs. If the detector takes longer than DETECT_TIMEOUT_S, we skip
+        # this frame and return empty detections.
         try:
-            raw = self._detect_fn(frame, profile)
+            future = self._executor.submit(self._detect_fn, frame, profile)
+            raw = future.result(timeout=self.DETECT_TIMEOUT_S)
+        except concurrent.futures.TimeoutError:
+            self._timeout_count += 1
+            if self._timeout_count <= 3 or self._timeout_count % 50 == 0:
+                log.warning(f"[detect/{self.game}] detector timed out ({self.DETECT_TIMEOUT_S}s) "
+                           f"— skipping frame (total timeouts: {self._timeout_count})")
+            raw = {}
         except Exception as e:
             log.error(f"[detect/{self.game}] detector raised: {e}")
             raw = {}

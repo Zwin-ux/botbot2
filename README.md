@@ -87,9 +87,9 @@ npm run dist        # PyInstaller + electron-builder → dist/installer/*.exe
 
 **Run tests (no game, no Tesseract needed):**
 ```bash
-npm test            # JS normalizer + decision engine (108 tests)
-npm run test:python # Python vision pipeline (48 tests)
-npm run test:all    # Everything (156 tests)
+npm test            # JS normalizer + decision engine (117 tests)
+npm run test:python # Python vision + Minesweeper detector (83 tests)
+npm run test:all    # Everything (200 tests)
 ```
 
 ---

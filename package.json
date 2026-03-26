@@ -13,8 +13,8 @@
     "test":           "node tests/test_normalizer.js && node tests/test_decision_engine.js",
     "test:normalizer": "node tests/test_normalizer.js",
     "test:decisions":  "node tests/test_decision_engine.js",
-    "test:python":     "python tests/test_vision_pipeline.py",
-    "test:all":        "node tests/test_normalizer.js && node tests/test_decision_engine.js && python tests/test_vision_pipeline.py"
+    "test:python":     "python tests/test_vision_pipeline.py && python tests/test_minesweeper_detector.py",
+    "test:all":        "node tests/test_normalizer.js && node tests/test_decision_engine.js && python tests/test_vision_pipeline.py && python tests/test_minesweeper_detector.py"
   },
   "dependencies": {
     "better-sqlite3":  "^9.4.3",

@@ -1,5 +1,32 @@
 # Game Profile Authoring Guide
 
+## Quick Start: Adding a New Game
+
+```bash
+# 1. Create your profile directory
+mkdir src/profiles/yourgame
+
+# 2. Copy a starter profile (Minesweeper is the simplest)
+cp src/profiles/minesweeper/profile.json src/profiles/yourgame/
+cp src/profiles/minesweeper/detector.py  src/profiles/yourgame/
+
+# 3. Take a screenshot of your game and calibrate ROIs
+python tools/calibrate_rois.py --capture --game yourgame
+
+# 4. Edit profile.json: update ROIs, rules, window title
+# 5. Edit detector.py: implement detection for your game's HUD
+
+# 6. Register your game
+#    - Add "yourgame" to VALID_GAMES in src/shared/ipc-channels.js
+#    - Add a row in src/onboarding/index.html game-list
+
+# 7. Test it
+python src/services/vision/server.py --test screenshot.png --game yourgame
+npm run test:all
+```
+
+---
+
 A GamePartner profile consists of exactly two files placed in `src/profiles/<game>/`:
 
 ```

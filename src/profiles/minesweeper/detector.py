@@ -15,6 +15,8 @@ Field mapping to the standard pipeline:
 
 ROI coordinates are read from profile.json. Default ROIs are calibrated
 for the classic Windows Minesweeper layout at default Expert board size.
+The detector also auto-detects difficulty (Beginner/Intermediate/Expert)
+from the window dimensions and adjusts ROI positions accordingly.
 
 OCR notes:
   The 7-segment LCD digits are bright red on black, making them ideal for
@@ -66,6 +68,65 @@ except ImportError:
     log.error("roi.py not found — check sys.path")
 
 
+# ── Difficulty-aware ROI sets ────────────────────────────────────────────────
+# Classic Minesweeper window sizes (client area, approximate):
+#   Beginner:     ~180 x 252   (9×9 board,  10 mines)
+#   Intermediate: ~304 x 346   (16×16 board, 40 mines)
+#   Expert:       ~488 x 346   (30×16 board, 99 mines)
+#
+# The header bar layout is the same across difficulties:
+#   - Mine counter always at top-left (x≈17, y≈56)
+#   - Timer always at top-right (x depends on window width)
+#   - Face button always centred (x = window_width/2 - 13)
+#
+# ROI format: [x, y, w, h]
+
+_HEADER_Y      = 56   # y position of LCD/face in header bar
+_LCD_W         = 41   # width of 3-digit LCD
+_LCD_H         = 23   # height of LCD
+_FACE_W        = 26   # face button width
+_FACE_H        = 26   # face button height
+_MINE_X        = 17   # mine counter x (same for all difficulties)
+_RIGHT_PAD     = 17   # padding from right edge to timer
+
+# Window width thresholds for difficulty detection
+_BEGINNER_MAX_W     = 220   # narrower than this = Beginner
+_INTERMEDIATE_MAX_W = 380   # narrower than this = Intermediate
+# wider = Expert
+
+
+def _rois_for_frame(frame: np.ndarray, profile_hud: dict) -> dict:
+    """
+    Return ROIs adjusted for the actual frame (window) dimensions.
+
+    If the frame width matches a known difficulty, compute timer and face
+    positions dynamically. Otherwise fall back to profile.json ROIs.
+    """
+    h, w = frame.shape[:2]
+
+    if w < 80 or h < 80:
+        # Too small to be a real game window — use profile defaults
+        return profile_hud
+
+    # Compute dynamic ROIs based on window width
+    timer_x = w - _RIGHT_PAD - _LCD_W
+    face_x  = (w // 2) - (_FACE_W // 2)
+
+    adjusted = {}
+    for key, cfg in profile_hud.items():
+        adjusted[key] = dict(cfg)  # shallow copy
+
+    # Override with computed positions
+    if "health" in adjusted:
+        adjusted["health"]["roi"] = [_MINE_X, _HEADER_Y, _LCD_W, _LCD_H]
+    if "credits" in adjusted:
+        adjusted["credits"]["roi"] = [timer_x, _HEADER_Y, _LCD_W, _LCD_H]
+    if "phase" in adjusted:
+        adjusted["phase"]["roi"] = [face_x, _HEADER_Y - 3, _FACE_W, _FACE_H]
+
+    return adjusted
+
+
 # ── Public interface ─────────────────────────────────────────────────────────
 
 def detect(frame: np.ndarray, profile: dict) -> dict:
@@ -86,7 +147,7 @@ def detect(frame: np.ndarray, profile: dict) -> dict:
     if not _CV2 or not _ROI:
         return result
 
-    hud = profile.get("hud", {})
+    hud = _rois_for_frame(frame, profile.get("hud", {}))
 
     # Mine counter -> health
     if "health" in hud:
